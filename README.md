@@ -109,13 +109,16 @@ aegis/
 │   │   ├── PMWValidator.sol       # PMW validation on Coston2
 │   │   ├── FDCAttestor.sol        # FDC attestation request & verification
 │   │   └── interfaces/
+│   │       ├── vault/             # Vault contract interfaces (IVaultCore, IPolicyRegistry, etc.)
+│   │       ├── fassets/           # FAssets interfaces (IAssetManager, IFlareContractRegistry, etc.)
 │   │       ├── pmw/               # PMW facet interfaces
 │   │       └── fdc/               # FDC contract interfaces
 │   ├── test/
 │   └── script/
 │       ├── DeployCoston2.s.sol
 │       ├── DeployPMWValidator.s.sol
-│       └── DeployFDCAttestor.s.sol
+│       ├── DeployFDCAttestor.s.sol
+│       └── DeployVaultContracts.s.sol
 ├── extension/                   # FCC extension (Go, in TEE)
 │   ├── go.mod
 │   ├── cmd/server/main.go
@@ -146,7 +149,8 @@ aegis/
 │   └── audit-verify.ts
 ├── scripts/
 │   ├── pmw_validate.py          # PMW validation on Coston2
-│   └── fdc_validate.py          # FDC attestation validation on Coston2
+│   ├── fdc_validate.py          # FDC attestation validation on Coston2
+│   └── vault_validate.py        # Vault contracts & FAssets integration validation
 ├── config/                      # Network configs
 │   ├── coston2/
 │   └── proxy/

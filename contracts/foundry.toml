@@ -9,3 +9,7 @@ optimizer_runs = 200
 
 [rpc_endpoints]
 coston2 = "https://coston2-api.flare.network/ext/C/rpc"
+
+[profile.fork]
+fork = true
+eth_rpc_url = "https://coston2-api.flare.network/ext/C/rpc"
