@@ -105,12 +105,17 @@ aegis/
 │   │   ├── PolicyRegistry.sol
 │   │   ├── SolvencyRoot.sol
 │   │   ├── InstructionSender.sol
-│   │   └── VerifierRole.sol
-│   ├── interfaces/
+│   │   ├── VerifierRole.sol
+│   │   ├── PMWValidator.sol       # PMW validation on Coston2
+│   │   ├── FDCAttestor.sol        # FDC attestation request & verification
+│   │   └── interfaces/
+│   │       ├── pmw/               # PMW facet interfaces
+│   │       └── fdc/               # FDC contract interfaces
 │   ├── test/
 │   └── script/
-│       ├── Deploy.s.sol
-│       └── DeployCoston2.s.sol
+│       ├── DeployCoston2.s.sol
+│       ├── DeployPMWValidator.s.sol
+│       └── DeployFDCAttestor.s.sol
 ├── extension/                   # FCC extension (Go, in TEE)
 │   ├── go.mod
 │   ├── cmd/server/main.go
@@ -119,6 +124,7 @@ aegis/
 │   │   ├── risk/                # RiskAgent (XGBoost)
 │   │   ├── policy/              # Policy Engine
 │   │   ├── attestation/         # SolvencyAttestor
+│   │   ├── attester/            # FDC Attestor (Layer 5)
 │   │   └── executor/            # ActionExecutor (PMW)
 │   ├── Dockerfile
 │   └── deployment/              # FCC deployment configs
@@ -138,6 +144,9 @@ aegis/
 ├── examples/
 │   ├── deposit-flow.ts
 │   └── audit-verify.ts
+├── scripts/
+│   ├── pmw_validate.py          # PMW validation on Coston2
+│   └── fdc_validate.py          # FDC attestation validation on Coston2
 ├── config/                      # Network configs
 │   ├── coston2/
 │   └── proxy/
