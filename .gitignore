@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+lib/
+
+# Build outputs
+out/
+cache/
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# Docker
+*.log
+
+# Coverage
+coverage/
+lcov.info
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# SDK
+sdk/dist/
