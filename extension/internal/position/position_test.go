@@ -840,8 +840,8 @@ func TestComputeSolvencyData(t *testing.T) {
         if totalLiabilities != 0 {
                 t.Fatalf("Expected total liabilities 0, got %d", totalLiabilities)
         }
-        if collateralRatioBps != 0 {
-                t.Fatalf("Expected collateral ratio 0 (no liabilities), got %d", collateralRatioBps)
+        if collateralRatioBps != 999999 {
+                t.Fatalf("Expected collateral ratio 999999 (no liabilities = fully solvent), got %d", collateralRatioBps)
         }
 }
 
