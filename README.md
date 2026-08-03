@@ -175,6 +175,8 @@ aegis/
 
 **Task 10 (Day 10):** ✅ COMPLETED — XGBoost risk model trained on historical FTSO data (200 trees, depth 6). Model bundled into extension; Go inference module runs in TEE. 20 features (rolling volatility, leverage ratio, concentration, drawdown, VaR, etc.) → risk score (0-100) + action classification (hold/rebalance/hedge/deleverage). SHAP explainability for auditor interpretability.
 
+**Task 11 (Day 11):** ✅ COMPLETED — RiskAgent module implements the full observe → score → decide → act → attest loop inside the TEE. Agent reads FTSO price feeds, runs XGBoost risk scoring, applies deterministic Policy Engine thresholds, executes actions via mock PMW on Coston2, and publishes solvency proofs on-chain. 66 tests pass including end-to-end loop, crash/rally simulation, threshold logic, and start/stop lifecycle.
+
 ## Roadmap
 
 | Phase | Timeline | Milestone |

@@ -10,6 +10,7 @@ import (
         "extension-scaffold/internal/attestation"
         "extension-scaffold/internal/config"
         "extension-scaffold/internal/position"
+        "extension-scaffold/internal/risk"
         "extension-scaffold/pkg/types"
 
         "github.com/flare-foundation/go-flare-common/pkg/tee/instruction"
@@ -32,6 +33,7 @@ type Extension struct {
         // Aegis core modules
         PositionComputer  *position.PositionComputer
         SolvencyAttestor  *attestation.SolvencyAttestor
+        RiskAgent         *risk.RiskAgent
 }
 
 // --- DO NOT MODIFY: New(), actionHandler() are boilerplate.
@@ -39,6 +41,27 @@ func New(extensionPort, signPort int) *Extension {
         e := &Extension{
                 PositionComputer: position.NewPositionComputer(position.DefaultPositionComputerConfig()),
                 SolvencyAttestor: attestation.NewSolvencyAttestor(attestation.DefaultSolvencyAttestorConfig()),
+        }
+
+        // Initialize the RiskAgent with XGBoost model
+        scorer, err := risk.NewRiskScorer()
+        if err != nil {
+                // Log the error but don't fail — the agent can be initialized later
+                fmt.Printf("Warning: failed to initialize RiskAgent: %v\n", err)
+        } else {
+                agentConfig := risk.DefaultRiskAgentConfig()
+                e.RiskAgent = risk.NewRiskAgent(agentConfig, scorer)
+
+                // Set up mock providers for Coston2 testing
+                // In production, these would be replaced with real on-chain providers
+                ftsoProvider := risk.NewMockFTSOProvider()
+                e.RiskAgent.SetFTSOProvider(ftsoProvider)
+
+                pmwExecutor := risk.NewMockPMWExecutor()
+                e.RiskAgent.SetPMWExecutor(pmwExecutor)
+
+                attestPublisher := risk.NewMockAttestationPublisher()
+                e.RiskAgent.SetAttestationPublisher(attestPublisher)
         }
 
         mux := http.NewServeMux()
@@ -71,6 +94,14 @@ func (e *Extension) stateHandler(w http.ResponseWriter, r *http.Request) {
                         TotalFxrpDeposited:  vaultState.TotalFxrpDeposited,
                         MerkleRoot:          vaultState.MerkleRoot,
                         SolvencyStatus:      solvencyStatus,
+
+                        // RiskAgent state
+                        AgentPhase:            string(e.getAgentState().Phase),
+                        AgentIterationCount:   e.getAgentState().IterationCount,
+                        AgentLastRiskScore:    e.getAgentState().LastRiskScore,
+                        AgentLastAction:       e.getAgentState().LastActionLabel,
+                        AgentTotalActions:     e.getAgentState().TotalActions,
+                        AgentTotalAttestations: e.getAgentState().TotalAttestations,
                 },
         }
         e.mu.RUnlock()
@@ -179,4 +210,12 @@ func (e *Extension) processSayGoodbye(action teetypes.Action, df *instruction.Da
         data, _ := json.Marshal(resp)
 
         return buildResult(action, df, data, 1, nil)
+}
+
+// getAgentState returns the current RiskAgent state, or a zero state if the agent is not initialized.
+func (e *Extension) getAgentState() risk.AgentState {
+        if e.RiskAgent == nil {
+                return risk.AgentState{Phase: risk.PhaseIdle}
+        }
+        return e.RiskAgent.GetState()
 }

@@ -53,6 +53,14 @@ type State struct {
         TotalFxrpDeposited  uint64 `json:"totalFxrpDeposited"`
         MerkleRoot          string `json:"merkleRoot"`
         SolvencyStatus      string `json:"solvencyStatus"`
+
+        // RiskAgent state
+        AgentPhase            string  `json:"agentPhase"`
+        AgentIterationCount   uint64  `json:"agentIterationCount"`
+        AgentLastRiskScore    float64 `json:"agentLastRiskScore"`
+        AgentLastAction       string  `json:"agentLastAction"`
+        AgentTotalActions     uint64  `json:"agentTotalActions"`
+        AgentTotalAttestations uint64 `json:"agentTotalAttestations"`
 }
 
 // --- DO NOT MODIFY below this line. ---
