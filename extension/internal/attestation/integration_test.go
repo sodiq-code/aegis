@@ -1,11 +1,13 @@
 package attestation
 
 import (
-        "crypto/sha256"
-        "encoding/hex"
         "fmt"
+        "math/big"
         "testing"
         "time"
+
+        "github.com/ethereum/go-ethereum/common"
+        "github.com/ethereum/go-ethereum/crypto"
 
         "extension-scaffold/internal/position"
 )
@@ -65,7 +67,7 @@ func TestEndToEnd_PositionToSolvencyProof(t *testing.T) {
                 t.Fatalf("Expected 2 active positions, got %d", vaultState.ActivePositionCount)
         }
 
-        // Step 4: Compute Merkle root from PositionComputer
+        // Step 4: Compute Merkle root from PositionComputer (keccak256)
         merkleRoot, err := pc.ComputeMerkleRoot()
         if err != nil {
                 t.Fatalf("Failed to compute Merkle root: %v", err)
@@ -73,7 +75,7 @@ func TestEndToEnd_PositionToSolvencyProof(t *testing.T) {
         if merkleRoot == "" {
                 t.Fatal("Merkle root should not be empty")
         }
-        t.Logf("Merkle root computed: %s", merkleRoot[:16]+"...")
+        t.Logf("Merkle root computed (keccak256): %s", merkleRoot[:16]+"...")
 
         // Step 5: Compute solvency data from PositionComputer
         solvencyRoot, totalCollateral, totalLiabilities, collateralRatioBps, err := pc.ComputeSolvencyData()
@@ -132,7 +134,8 @@ func TestEndToEnd_PositionToSolvencyProof(t *testing.T) {
         t.Logf("Task 9 acceptance criterion MET: SolvencyRoot published from extension")
 }
 
-// TestEndToEnd_MerkleProofVerification tests the full Merkle proof verification flow.
+// TestEndToEnd_MerkleProofVerification tests the full Merkle proof verification flow
+// using keccak256 with sorted left/right ordering (matching Solidity's _verifyMerkleProof).
 func TestEndToEnd_MerkleProofVerification(t *testing.T) {
         pc := position.NewPositionComputer(position.DefaultPositionComputerConfig())
 
@@ -141,7 +144,7 @@ func TestEndToEnd_MerkleProofVerification(t *testing.T) {
                 event := &position.OnChainEvent{
                         EventType:  "DepositMade",
                         PositionID: uint64(i),
-                        Depositor:  "0xDepositor" + string(rune('0'+i)),
+                        Depositor:  fmt.Sprintf("0xDepositor%d", i),
                         Amount:     uint64(100_000_000 * i),
                         USDValue:   uint64(50000 * i),
                         Timestamp:  time.Now(),
@@ -159,42 +162,24 @@ func TestEndToEnd_MerkleProofVerification(t *testing.T) {
         if err != nil {
                 t.Fatalf("Failed to compute Merkle root: %v", err)
         }
-        t.Logf("Merkle root (4 positions): %s", merkleRoot[:16]+"...")
+        t.Logf("Merkle root (4 positions, keccak256): %s", merkleRoot[:16]+"...")
 
-        // Generate Merkle proof for position 1
-        merkleProof, err := pc.GenerateMerkleProof(1)
-        if err != nil {
-                t.Fatalf("Failed to generate Merkle proof: %v", err)
-        }
-        t.Logf("Merkle proof for position 1: %d nodes", len(merkleProof))
+        // Generate and verify Merkle proofs for ALL positions
+        for i := uint64(1); i <= 4; i++ {
+                proof, err := pc.GenerateMerkleProof(i)
+                if err != nil {
+                        t.Fatalf("Failed to generate Merkle proof for position %d: %v", i, err)
+                }
 
-        // Get position 1 data and compute leaf hash
-        pos1, err := pc.GetPosition(1)
-        if err != nil {
-                t.Fatalf("Failed to get position 1: %v", err)
-        }
-        leafHash := computeTestLeafHash(pos1.PositionID, pos1.Depositor, pos1.FxrpAmount, pos1.USDValuation)
+                pos, _ := pc.GetPosition(i)
+                leaf := position.ComputeLeafHashKeccak256(pos.PositionID, pos.Depositor, pos.FxrpAmount, pos.USDValuation)
+                rootHash := common.HexToHash(merkleRoot)
 
-        // Verify the Merkle proof using the PositionComputer's own verification
-        // The PositionComputer's VerifyMerkleProof uses the same concatenation logic
-        // as the Merkle tree construction, so it should work correctly
-        isValid := pc.VerifyMerkleProof(leafHash, merkleProof, merkleRoot)
-        if !isValid {
-                // The proof verification may fail due to the sorted Merkle tree construction
-                // where the sibling order matters. The PositionComputer's generateProof
-                // and VerifyMerkleProof use the same algorithm, so they should be consistent.
-                // If they don't match, it's because the proof generation doesn't preserve
-                // the left/right ordering needed for the sorted tree.
-                t.Logf("NOTE: Merkle proof verification requires left/right ordering in the proof. "+
-                        "The PositionComputer sorts leaves before building the tree, so the proof nodes "+
-                        "need to indicate their position. This is a known limitation of the current "+
-                        "implementation and will be fixed in the Solidity integration. The Merkle root "+
-                        "computation itself is correct and deterministic.")
-                t.Logf("Leaf hash: %s", leafHash[:16]+"...")
-                t.Logf("Proof: %v", merkleProof)
-                t.Logf("Root: %s", merkleRoot[:16]+"...")
-        } else {
-                t.Logf("Merkle proof for position 1 is VALID against root %s", merkleRoot[:16]+"...")
+                isValid := pc.VerifyMerkleProof(leaf, proof, rootHash)
+                if !isValid {
+                        t.Fatalf("Merkle proof verification FAILED for position %d (keccak256 sorted tree)", i)
+                }
+                t.Logf("Position %d: Merkle proof VALID (keccak256, %d proof nodes)", i, len(proof))
         }
 
         // The key test: the Merkle root is deterministic
@@ -326,41 +311,91 @@ func TestEndToEnd_PositionVerificationForAuditor(t *testing.T) {
         // Get position 1 data
         pos1, _ := pc.GetPosition(1)
 
-        // Compute leaf hash using the same algorithm as SolvencyAttestor
-        leafHash := ComputeLeafHash(pos1.PositionID, pos1.Depositor, pos1.FxrpAmount, pos1.USDValuation)
+        // Compute leaf hash using keccak256 (matching Solidity's abi.encodePacked)
+        leafHash := position.ComputeLeafHashKeccak256(pos1.PositionID, pos1.Depositor, pos1.FxrpAmount, pos1.USDValuation)
 
-        // Verify the Merkle proof using the SolvencyAttestor
+        // Verify the Merkle proof using the PositionComputer (keccak256 sorted tree)
+        rootHash := common.HexToHash(merkleRoot)
+        isValid := pc.VerifyMerkleProof(leafHash, merkleProof, rootHash)
+        if !isValid {
+                t.Fatalf("Merkle proof verification FAILED for position 1 (keccak256 sorted tree)")
+        }
+        t.Logf("SUCCESS: Auditor can verify position %d inclusion without seeing other positions (keccak256)", pos1.PositionID)
+
+        // Also verify using the SolvencyAttestor's hex-based verification
+        leafHashHex := common.Bytes2Hex(leafHash[:])
+        proofHex := make([]string, len(merkleProof))
+        for i, p := range merkleProof {
+                proofHex[i] = common.Bytes2Hex(p[:])
+        }
         verification, err := sa.VerifyPositionInclusion(
                 pos1.PositionID,
                 pos1.Depositor,
                 pos1.FxrpAmount,
                 pos1.USDValuation,
-                leafHash,
-                merkleProof,
+                leafHashHex,
+                proofHex,
         )
         if err != nil {
                 t.Fatalf("Failed to verify position inclusion: %v", err)
         }
-
-        t.Logf("Auditor verification: positionId=%d, included=%v, root=%s",
-                verification.PositionID, verification.IsIncluded, proof.MerkleRoot[:16]+"...")
-
-        // Verify the Merkle proof using the PositionComputer
-        isValid := pc.VerifyMerkleProof(leafHash, merkleProof, merkleRoot)
-        if !isValid {
-                t.Log("NOTE: Merkle proof verification requires matching algorithms between Go and Solidity")
-        } else {
-                t.Logf("SUCCESS: Auditor can verify position inclusion without seeing other positions")
+        if verification.IsIncluded {
+                t.Logf("SolvencyAttestor verification: position %d is included in root %s", pos1.PositionID, proof.MerkleRoot[:16]+"...")
         }
 }
 
-// ==========================================
-// HELPER FUNCTIONS
-// ==========================================
+// TestEndToEnd_Keccak256SolidityCompatibility verifies that the Go keccak256
+// Merkle tree is compatible with the Solidity SolvencyRoot._verifyMerkleProof function.
+func TestEndToEnd_Keccak256SolidityCompatibility(t *testing.T) {
+        pc := position.NewPositionComputer(position.DefaultPositionComputerConfig())
 
-// computeTestLeafHash computes the leaf hash for a position, matching the PositionComputer algorithm.
-func computeTestLeafHash(positionID uint64, depositor string, fxrpAmount uint64, usdValuation uint64) string {
-        data := fmt.Sprintf("%d|%s|%d|%d", positionID, depositor, fxrpAmount, usdValuation)
-        h := sha256.Sum256([]byte(data))
-        return hex.EncodeToString(h[:])
+        // Create positions with known addresses
+        pc.ProcessEvent(&position.OnChainEvent{
+                EventType:  "DepositMade",
+                PositionID: 1,
+                Depositor:  "0x0000000000000000000000000000000000000001",
+                Amount:     1000000000,
+                USDValue:   500000,
+                Timestamp:  time.Now(),
+                BlockNum:   1,
+        })
+        pc.ProcessEvent(&position.OnChainEvent{
+                EventType:  "DepositMade",
+                PositionID: 2,
+                Depositor:  "0x0000000000000000000000000000000000000002",
+                Amount:     2000000000,
+                USDValue:   1000000,
+                Timestamp:  time.Now(),
+                BlockNum:   2,
+        })
+
+        // Compute Merkle root
+        root, _ := pc.ComputeMerkleRoot()
+
+        // Verify the leaf hash matches Solidity's keccak256(abi.encodePacked(...))
+        pos1, _ := pc.GetPosition(1)
+        leaf1 := position.ComputeLeafHashKeccak256(pos1.PositionID, pos1.Depositor, pos1.FxrpAmount, pos1.USDValuation)
+
+        // Manually construct the expected leaf hash
+        // Solidity: keccak256(abi.encodePacked(uint256(1), address(0x01), uint256(1000000000), uint256(500000)))
+        addr := common.HexToAddress("0x0000000000000000000000000000000000000001")
+        data := make([]byte, 0, 116)
+        data = append(data, common.LeftPadBytes([]byte{1}, 32)...)
+        data = append(data, addr.Bytes()...)
+        data = append(data, common.LeftPadBytes(new(big.Int).SetUint64(1000000000).Bytes(), 32)...)
+        data = append(data, common.LeftPadBytes(new(big.Int).SetUint64(500000).Bytes(), 32)...)
+        expectedLeaf := crypto.Keccak256Hash(data)
+
+        if leaf1 != expectedLeaf {
+                t.Fatalf("Leaf hash mismatch: Go=%x, Expected=%x", leaf1, expectedLeaf)
+        }
+        t.Logf("SUCCESS: Go keccak256 leaf hash matches Solidity's keccak256(abi.encodePacked(...))")
+
+        // Generate and verify Merkle proof
+        proof, _ := pc.GenerateMerkleProof(1)
+        rootHash := common.HexToHash(root)
+        if !pc.VerifyMerkleProof(leaf1, proof, rootHash) {
+                t.Fatal("Merkle proof verification FAILED for Solidity-compatible keccak256 tree")
+        }
+        t.Logf("SUCCESS: Merkle proof verification works with Solidity-compatible keccak256 tree")
 }

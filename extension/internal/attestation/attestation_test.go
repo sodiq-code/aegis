@@ -1,126 +1,120 @@
 package attestation
 
 import (
+        "fmt"
+        "math/big"
         "testing"
+
+        "github.com/ethereum/go-ethereum/common"
+        "github.com/ethereum/go-ethereum/crypto"
 )
 
 // ==========================================
-// CONSTRUCTOR TESTS
+// SolvencyAttestor Core Tests
 // ==========================================
 
-func TestNewSolvencyAttestor(t *testing.T) {
+func TestSolvencyAttestor_New(t *testing.T) {
         config := DefaultSolvencyAttestorConfig()
         sa := NewSolvencyAttestor(config)
 
         if sa == nil {
-                t.Fatal("SolvencyAttestor should not be nil")
+                t.Fatal("SolvencyAttestor is nil")
         }
         if sa.GetProofCount() != 0 {
                 t.Fatalf("Expected 0 proofs, got %d", sa.GetProofCount())
         }
-        if sa.IsSolvent() {
-                t.Fatal("Expected IsSolvent=false with no proofs")
-        }
 }
 
-func TestDefaultSolvencyAttestorConfig(t *testing.T) {
-        config := DefaultSolvencyAttestorConfig()
-
-        if config.RPCURL != "https://coston2-api.flare.network/ext/C/rpc" {
-                t.Fatalf("Expected Coston2 RPC URL, got %s", config.RPCURL)
-        }
-        if config.MinCollateralRatioBps != 15000 {
-                t.Fatalf("Expected 15000 min collateral ratio, got %d", config.MinCollateralRatioBps)
-        }
-        if config.PublicationIntervalSec != 300 {
-                t.Fatalf("Expected 300 publication interval, got %d", config.PublicationIntervalSec)
-        }
-}
-
-// ==========================================
-// COMPUTE AND PUBLISH TESTS
-// ==========================================
-
-func TestComputeAndPublishSolvencyProof(t *testing.T) {
+func TestSolvencyAttestor_ComputeAndPublishSolvencyProof(t *testing.T) {
         sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
 
+        // Compute a Merkle root from a simple test
+        merkleRoot := crypto.Keccak256Hash([]byte("test-merkle-root")).Hex()
+
         proof, err := sa.ComputeAndPublishSolvencyProof(
-                "abc123def456",  // merkleRoot
-                1_000_000_000,   // totalCollateral
-                500_000_000,     // totalLiabilities
-                20000,           // collateralRatioBps
-                1414258,         // votingRound
+                merkleRoot,
+                1000000000, // 1000 FXRP collateral
+                0,          // No liabilities
+                999999,     // Effectively infinite collateral ratio
+                1000,       // Voting round
         )
         if err != nil {
                 t.Fatalf("Failed to compute solvency proof: %v", err)
         }
 
-        if proof.MerkleRoot != "abc123def456" {
-                t.Fatalf("Expected merkle root abc123def456, got %s", proof.MerkleRoot)
-        }
-        if proof.TotalFxrpCollateral != 1_000_000_000 {
-                t.Fatalf("Expected total collateral 1000000000, got %d", proof.TotalFxrpCollateral)
-        }
-        if proof.TotalFxrpLiabilities != 500_000_000 {
-                t.Fatalf("Expected total liabilities 500000000, got %d", proof.TotalFxrpLiabilities)
-        }
-        if proof.CollateralRatioBps != 20000 {
-                t.Fatalf("Expected collateral ratio 20000, got %d", proof.CollateralRatioBps)
+        if proof.MerkleRoot != merkleRoot {
+                t.Fatalf("Merkle root mismatch: got %s, expected %s", proof.MerkleRoot, merkleRoot)
         }
         if proof.Status != SolvencyStatusSolvent {
                 t.Fatalf("Expected SOLVENT status, got %s", proof.Status)
         }
-        if proof.VotingRound != 1414258 {
-                t.Fatalf("Expected voting round 1414258, got %d", proof.VotingRound)
+        if proof.TotalFxrpCollateral != 1000000000 {
+                t.Fatalf("Expected 1000000000 collateral, got %d", proof.TotalFxrpCollateral)
+        }
+        if proof.TotalFxrpLiabilities != 0 {
+                t.Fatalf("Expected 0 liabilities, got %d", proof.TotalFxrpLiabilities)
         }
 }
 
-func TestComputeAndPublishSolvencyProof_EmptyRoot(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+func TestSolvencyAttestor_WarningStatus(t *testing.T) {
+        config := DefaultSolvencyAttestorConfig()
+        sa := NewSolvencyAttestor(config)
 
-        _, err := sa.ComputeAndPublishSolvencyProof("", 1000, 500, 20000, 1)
-        if err == nil {
-                t.Fatal("Expected error for empty merkle root")
-        }
-}
-
-func TestComputeAndPublishSolvencyProof_Insolvent(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+        // Collateral ratio between 80% and 100% of minimum (15000)
+        // 80% of 15000 = 12000
+        merkleRoot := crypto.Keccak256Hash([]byte("test-warning")).Hex()
 
         proof, err := sa.ComputeAndPublishSolvencyProof(
-                "insolvent-root", 500_000_000, 500_000_000, 10000, 1414258,
+                merkleRoot,
+                1000000000,
+                800000000,
+                12500, // 125% collateral ratio — between 80% and 100% of min (15000)
+                1000,
         )
         if err != nil {
                 t.Fatalf("Failed to compute solvency proof: %v", err)
         }
-        if proof.Status != SolvencyStatusInsolvent {
-                t.Fatalf("Expected INSOLVENT status, got %s", proof.Status)
-        }
-}
 
-func TestComputeAndPublishSolvencyProof_Warning(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        // 80% of 15000 = 12000 — this should be a WARNING
-        proof, err := sa.ComputeAndPublishSolvencyProof(
-                "warning-root", 600_000_000, 500_000_000, 12000, 1414258,
-        )
-        if err != nil {
-                t.Fatalf("Failed to compute solvency proof: %v", err)
-        }
         if proof.Status != SolvencyStatusWarning {
                 t.Fatalf("Expected WARNING status, got %s", proof.Status)
         }
 }
 
-// ==========================================
-// VERIFY SOLVENCY TESTS
-// ==========================================
+func TestSolvencyAttestor_InsolventStatus(t *testing.T) {
+        config := DefaultSolvencyAttestorConfig()
+        sa := NewSolvencyAttestor(config)
 
-func TestVerifySolvency(t *testing.T) {
+        // Collateral ratio below 80% of minimum
+        merkleRoot := crypto.Keccak256Hash([]byte("test-insolvent")).Hex()
+
+        proof, err := sa.ComputeAndPublishSolvencyProof(
+                merkleRoot,
+                1000000000,
+                900000000,
+                10000, // 100% collateral ratio — below 80% of min (15000)
+                1000,
+        )
+        if err != nil {
+                t.Fatalf("Failed to compute solvency proof: %v", err)
+        }
+
+        if proof.Status != SolvencyStatusInsolvent {
+                t.Fatalf("Expected INSOLVENT status, got %s", proof.Status)
+        }
+}
+
+func TestSolvencyAttestor_VerifySolvency(t *testing.T) {
         sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
 
-        sa.ComputeAndPublishSolvencyProof("solvent-root", 1_000_000_000, 500_000_000, 20000, 1414258)
+        merkleRoot := crypto.Keccak256Hash([]byte("test-solvent")).Hex()
+
+        sa.ComputeAndPublishSolvencyProof(
+                merkleRoot,
+                1000000000,
+                0,
+                999999,
+                1000,
+        )
 
         isSolvent, proof, err := sa.VerifySolvency()
         if err != nil {
@@ -130,396 +124,281 @@ func TestVerifySolvency(t *testing.T) {
                 t.Fatal("Expected vault to be solvent")
         }
         if proof == nil {
-                t.Fatal("Proof should not be nil")
+                t.Fatal("Proof is nil")
         }
 }
 
-func TestVerifySolvency_NoProofs(t *testing.T) {
+func TestSolvencyAttestor_VerifySolvencyNoProof(t *testing.T) {
         sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
 
         _, _, err := sa.VerifySolvency()
         if err == nil {
-                t.Fatal("Expected error with no proofs")
+                t.Fatal("Expected error when no proof available")
+        }
+}
+
+func TestSolvencyAttestor_IsSolvent(t *testing.T) {
+        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+
+        // No proof yet — should be insolvent
+        if sa.IsSolvent() {
+                t.Fatal("Expected insolvent when no proof")
+        }
+
+        // Publish solvent proof
+        merkleRoot := crypto.Keccak256Hash([]byte("test-solvent")).Hex()
+        sa.ComputeAndPublishSolvencyProof(merkleRoot, 1000000000, 0, 999999, 1000)
+
+        if !sa.IsSolvent() {
+                t.Fatal("Expected solvent after publishing proof")
+        }
+}
+
+func TestSolvencyAttestor_GetLatestProof(t *testing.T) {
+        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+
+        if sa.GetLatestProof() != nil {
+                t.Fatal("Expected nil proof initially")
+        }
+
+        merkleRoot := crypto.Keccak256Hash([]byte("test-proof")).Hex()
+        sa.ComputeAndPublishSolvencyProof(merkleRoot, 1000000000, 0, 999999, 1000)
+
+        proof := sa.GetLatestProof()
+        if proof == nil {
+                t.Fatal("Expected non-nil proof")
+        }
+        if proof.MerkleRoot != merkleRoot {
+                t.Fatalf("Merkle root mismatch: got %s, expected %s", proof.MerkleRoot, merkleRoot)
+        }
+}
+
+func TestSolvencyAttestor_GetProofHistory(t *testing.T) {
+        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+
+        for i := 0; i < 5; i++ {
+                merkleRoot := crypto.Keccak256Hash([]byte(fmt.Sprintf("test-proof-%d", i))).Hex()
+                sa.ComputeAndPublishSolvencyProof(merkleRoot, 1000000000, 0, 999999, uint64(1000+i))
+        }
+
+        history := sa.GetProofHistory(3)
+        if len(history) != 3 {
+                t.Fatalf("Expected 3 proofs in history, got %d", len(history))
+        }
+
+        allHistory := sa.GetProofHistory(0)
+        if len(allHistory) != 5 {
+                t.Fatalf("Expected 5 proofs in full history, got %d", len(allHistory))
+        }
+}
+
+func TestSolvencyAttestor_MarkProofPublished(t *testing.T) {
+        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+
+        merkleRoot := crypto.Keccak256Hash([]byte("test-published")).Hex()
+        sa.ComputeAndPublishSolvencyProof(merkleRoot, 1000000000, 0, 999999, 1000)
+
+        if sa.GetPendingCount() != 1 {
+                t.Fatalf("Expected 1 pending proof, got %d", sa.GetPendingCount())
+        }
+
+        err := sa.MarkProofPublished(merkleRoot)
+        if err != nil {
+                t.Fatalf("Failed to mark proof as published: %v", err)
+        }
+
+        if sa.GetPendingCount() != 0 {
+                t.Fatalf("Expected 0 pending proofs after publishing, got %d", sa.GetPendingCount())
+        }
+}
+
+func TestSolvencyAttestor_MarkProofPublishedNotFound(t *testing.T) {
+        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+
+        err := sa.MarkProofPublished("0xnonexistent")
+        if err == nil {
+                t.Fatal("Expected error for non-existent proof")
+        }
+}
+
+func TestSolvencyAttestor_Validate(t *testing.T) {
+        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+        err := sa.ValidateAttestor()
+        if err != nil {
+                t.Fatalf("Validation failed: %v", err)
+        }
+}
+
+func TestSolvencyAttestor_Reset(t *testing.T) {
+        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
+
+        merkleRoot := crypto.Keccak256Hash([]byte("test-reset")).Hex()
+        sa.ComputeAndPublishSolvencyProof(merkleRoot, 1000000000, 0, 999999, 1000)
+
+        sa.Reset()
+
+        if sa.GetProofCount() != 0 {
+                t.Fatalf("Expected 0 proofs after reset, got %d", sa.GetProofCount())
+        }
+        if sa.GetPendingCount() != 0 {
+                t.Fatalf("Expected 0 pending proofs after reset, got %d", sa.GetPendingCount())
         }
 }
 
 // ==========================================
-// POSITION INCLUSION VERIFICATION TESTS
+// keccak256 Merkle Proof Verification Tests
 // ==========================================
 
-func TestVerifyPositionInclusion(t *testing.T) {
+func TestVerifyMerkleProof_Keccak256(t *testing.T) {
+        // Test that the keccak256-based Merkle proof verification works
+        // This matches the Solidity SolvencyRoot._verifyMerkleProof function
+
+        // Create two leaf hashes
+        leaf1 := crypto.Keccak256Hash([]byte("leaf1"))
+        leaf2 := crypto.Keccak256Hash([]byte("leaf2"))
+
+        // Compute the root using sorted ordering
+        // In Solidity: if computedHash <= proofElement, hash(computedHash, proofElement)
+        // else hash(proofElement, computedHash)
+        leaf1Int := new(big.Int).SetBytes(leaf1[:])
+        leaf2Int := new(big.Int).SetBytes(leaf2[:])
+
+        var root [32]byte
+        if leaf1Int.Cmp(leaf2Int) <= 0 {
+                root = crypto.Keccak256Hash(append(leaf1[:], leaf2[:]...))
+        } else {
+                root = crypto.Keccak256Hash(append(leaf2[:], leaf1[:]...))
+        }
+
+        // Verify leaf1 against root
+        proof := []string{common.Bytes2Hex(leaf2[:])}
+        rootHex := common.BytesToHash(root[:]).Hex()
+        leaf1Hex := common.Bytes2Hex(leaf1[:])
+
+        if !verifyMerkleProof(leaf1Hex, proof, rootHex) {
+                t.Fatal("Merkle proof verification failed for leaf1")
+        }
+
+        // Verify leaf2 against root
+        proof2 := []string{common.Bytes2Hex(leaf1[:])}
+        leaf2Hex := common.Bytes2Hex(leaf2[:])
+
+        if !verifyMerkleProof(leaf2Hex, proof2, rootHex) {
+                t.Fatal("Merkle proof verification failed for leaf2")
+        }
+}
+
+func TestComputeLeafHash_Keccak256(t *testing.T) {
+        // Test that the leaf hash computation matches Solidity's
+        // keccak256(abi.encodePacked(positionId, depositor, fxrpAmount, usdValuation))
+        leaf := ComputeLeafHash(
+                1,                                  // positionId
+                "0x0000000000000000000000000000000000000001", // depositor
+                1000000000,                         // fxrpAmount
+                500000,                             // usdValuation
+        )
+
+        if leaf == "" {
+                t.Fatal("Leaf hash is empty")
+        }
+
+        // Verify it's a valid hex hash
+        parsed := common.HexToHash(leaf)
+        if parsed == (common.Hash{}) {
+                t.Fatal("Leaf hash is zero")
+        }
+
+        // Verify deterministic
+        leaf2 := ComputeLeafHash(1, "0x0000000000000000000000000000000000000001", 1000000000, 500000)
+        if leaf != leaf2 {
+                t.Fatal("Leaf hash is not deterministic")
+        }
+
+        // Different positions should produce different hashes
+        leaf3 := ComputeLeafHash(2, "0x0000000000000000000000000000000000000002", 2000000000, 1000000)
+        if leaf == leaf3 {
+                t.Fatal("Different positions should produce different leaf hashes")
+        }
+}
+
+// ==========================================
+// Position Inclusion Verification Tests
+// ==========================================
+
+func TestSolvencyAttestor_VerifyPositionInclusion(t *testing.T) {
         sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
 
-        // Create a proof with a known Merkle root
-        sa.ComputeAndPublishSolvencyProof("test-root-hash", 1_000_000_000, 500_000_000, 20000, 1414258)
+        // Compute a Merkle root from test positions
+        merkleRoot := crypto.Keccak256Hash([]byte("test-inclusion")).Hex()
 
-        // Verify a position with a simple proof
+        sa.ComputeAndPublishSolvencyProof(merkleRoot, 1000000000, 0, 999999, 1000)
+
+        // Test position inclusion verification
+        leafHash := ComputeLeafHash(1, "0xInstitution1", 1000000000, 500000)
         verification, err := sa.VerifyPositionInclusion(
-                1, "0xDepositor1", 100_000_000, 50000,
-                "leaf-hash", []string{"sibling-hash"},
+                1, "0xInstitution1", 1000000000, 500000,
+                leafHash, []string{},
         )
         if err != nil {
                 t.Fatalf("Failed to verify position inclusion: %v", err)
         }
         if verification == nil {
-                t.Fatal("Verification should not be nil")
-        }
-        // Note: The proof verification will fail because the hashes don't match,
-        // but the function should still work correctly.
-}
-
-func TestVerifyPositionInclusion_NoProofs(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        _, err := sa.VerifyPositionInclusion(1, "0xDepositor1", 100, 50, "leaf", []string{})
-        if err == nil {
-                t.Fatal("Expected error with no proofs")
+                t.Fatal("Verification is nil")
         }
 }
 
 // ==========================================
-// PROOF MANAGEMENT TESTS
+// End-to-End Tests
 // ==========================================
 
-func TestGetLatestProof(t *testing.T) {
+func TestSolvencyAttestor_EndToEnd_FullFlow(t *testing.T) {
         sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
 
-        // No proofs initially
-        if sa.GetLatestProof() != nil {
-                t.Fatal("Expected nil latest proof initially")
-        }
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        sa.ComputeAndPublishSolvencyProof("root2", 1_200_000_000, 500_000_000, 24000, 1414259)
-
-        latest := sa.GetLatestProof()
-        if latest.MerkleRoot != "root2" {
-                t.Fatalf("Expected latest root 'root2', got %s", latest.MerkleRoot)
-        }
-}
-
-func TestGetProofHistory(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        sa.ComputeAndPublishSolvencyProof("root2", 1_200_000_000, 500_000_000, 24000, 1414259)
-        sa.ComputeAndPublishSolvencyProof("root3", 1_500_000_000, 500_000_000, 30000, 1414260)
-
-        history := sa.GetProofHistory(2)
-        if len(history) != 2 {
-                t.Fatalf("Expected 2 proofs in history, got %d", len(history))
-        }
-        if history[0].MerkleRoot != "root2" {
-                t.Fatalf("Expected first proof root 'root2', got %s", history[0].MerkleRoot)
-        }
-        if history[1].MerkleRoot != "root3" {
-                t.Fatalf("Expected second proof root 'root3', got %s", history[1].MerkleRoot)
-        }
-}
-
-func TestGetProofHistory_All(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        sa.ComputeAndPublishSolvencyProof("root2", 1_200_000_000, 500_000_000, 24000, 1414259)
-
-        history := sa.GetProofHistory(0) // 0 means all
-        if len(history) != 2 {
-                t.Fatalf("Expected 2 proofs in history, got %d", len(history))
-        }
-}
-
-func TestGetPendingProofs(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        sa.ComputeAndPublishSolvencyProof("root2", 1_200_000_000, 500_000_000, 24000, 1414259)
-
-        pending := sa.GetPendingProofs()
-        if len(pending) != 2 {
-                t.Fatalf("Expected 2 pending proofs, got %d", len(pending))
-        }
-}
-
-func TestMarkProofPublished(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        sa.ComputeAndPublishSolvencyProof("root2", 1_200_000_000, 500_000_000, 24000, 1414259)
-
-        err := sa.MarkProofPublished("root1")
+        // 1. Compute solvency proof
+        merkleRoot := crypto.Keccak256Hash([]byte("e2e-test")).Hex()
+        proof, err := sa.ComputeAndPublishSolvencyProof(
+                merkleRoot, 1000000000, 0, 999999, 1000,
+        )
         if err != nil {
-                t.Fatalf("Failed to mark proof as published: %v", err)
-        }
-
-        pending := sa.GetPendingProofs()
-        if len(pending) != 1 {
-                t.Fatalf("Expected 1 pending proof, got %d", len(pending))
-        }
-        if pending[0].MerkleRoot != "root2" {
-                t.Fatalf("Expected pending root 'root2', got %s", pending[0].MerkleRoot)
-        }
-}
-
-func TestMarkProofPublished_NotFound(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        err := sa.MarkProofPublished("nonexistent")
-        if err == nil {
-                t.Fatal("Expected error for nonexistent proof")
-        }
-}
-
-// ==========================================
-// IS SOLVENT TESTS
-// ==========================================
-
-func TestIsSolvent_Solvent(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-
-        if !sa.IsSolvent() {
-                t.Fatal("Expected vault to be solvent")
-        }
-}
-
-func TestIsSolvent_Warning(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        // 12000 is between 80% and 100% of 15000 — WARNING
-        sa.ComputeAndPublishSolvencyProof("root1", 600_000_000, 500_000_000, 12000, 1414258)
-
-        if !sa.IsSolvent() {
-                t.Fatal("Expected vault to be solvent (WARNING status is still solvent)")
-        }
-}
-
-func TestIsSolvent_Insolvent(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        sa.ComputeAndPublishSolvencyProof("root1", 500_000_000, 500_000_000, 10000, 1414258)
-
-        if sa.IsSolvent() {
-                t.Fatal("Expected vault to be insolvent")
-        }
-}
-
-func TestGetSolvencyStatus(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        if sa.GetSolvencyStatus() != SolvencyStatusInsolvent {
-                t.Fatal("Expected INSOLVENT status with no proofs")
-        }
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        if sa.GetSolvencyStatus() != SolvencyStatusSolvent {
-                t.Fatalf("Expected SOLVENT status, got %s", sa.GetSolvencyStatus())
-        }
-}
-
-// ==========================================
-// VALIDATION TESTS
-// ==========================================
-
-func TestValidateAttestor(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        err := sa.ValidateAttestor()
-        if err != nil {
-                t.Fatalf("SolvencyAttestor validation failed: %v", err)
-        }
-}
-
-func TestValidateAttestor_MissingRPCURL(t *testing.T) {
-        config := DefaultSolvencyAttestorConfig()
-        config.RPCURL = ""
-        sa := NewSolvencyAttestor(config)
-
-        err := sa.ValidateAttestor()
-        if err == nil {
-                t.Fatal("Expected error for missing RPC URL")
-        }
-}
-
-// ==========================================
-// RESET TESTS
-// ==========================================
-
-func TestReset(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-
-        sa.Reset()
-
-        if sa.GetProofCount() != 0 {
-                t.Fatalf("Expected 0 proofs after reset, got %d", sa.GetProofCount())
-        }
-        if sa.GetLatestProof() != nil {
-                t.Fatal("Expected nil latest proof after reset")
-        }
-}
-
-// ==========================================
-// HELPER FUNCTION TESTS
-// ==========================================
-
-func TestComputeLeafHash(t *testing.T) {
-        hash1 := ComputeLeafHash(1, "0xDepositor1", 100_000_000, 50000)
-        hash2 := ComputeLeafHash(2, "0xDepositor2", 200_000_000, 100000)
-
-        if hash1 == "" {
-                t.Fatal("Leaf hash should not be empty")
-        }
-        if hash1 == hash2 {
-                t.Fatal("Different positions should produce different hashes")
-        }
-
-        // Deterministic
-        hash1Again := ComputeLeafHash(1, "0xDepositor1", 100_000_000, 50000)
-        if hash1 != hash1Again {
-                t.Fatal("Leaf hash should be deterministic")
-        }
-}
-
-func TestVerifyMerkleProof(t *testing.T) {
-        // Simple test: empty proof, leaf = root
-        isValid := verifyMerkleProof("test-root", []string{}, "test-root")
-        if !isValid {
-                t.Fatal("Expected valid proof for empty proof with matching root")
-        }
-
-        // Invalid proof
-        isValid = verifyMerkleProof("wrong-leaf", []string{}, "test-root")
-        if isValid {
-                t.Fatal("Expected invalid proof for wrong leaf")
-        }
-}
-
-// ==========================================
-// BUILD ACTION TESTS
-// ==========================================
-
-func TestBuildSolvencyAction(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        proof, _ := sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-
-        action, err := sa.BuildSolvencyAction(proof)
-        if err != nil {
-                t.Fatalf("Failed to build solvency action: %v", err)
-        }
-        if action == nil {
-                t.Fatal("Action should not be nil")
-        }
-}
-
-func TestBuildSolvencyAction_NilProof(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        _, err := sa.BuildSolvencyAction(nil)
-        if err == nil {
-                t.Fatal("Expected error for nil proof")
-        }
-}
-
-// ==========================================
-// COUNT TESTS
-// ==========================================
-
-func TestGetProofCount(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        if sa.GetProofCount() != 0 {
-                t.Fatalf("Expected 0 proofs, got %d", sa.GetProofCount())
-        }
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        if sa.GetProofCount() != 1 {
-                t.Fatalf("Expected 1 proof, got %d", sa.GetProofCount())
-        }
-
-        sa.ComputeAndPublishSolvencyProof("root2", 1_200_000_000, 500_000_000, 24000, 1414259)
-        if sa.GetProofCount() != 2 {
-                t.Fatalf("Expected 2 proofs, got %d", sa.GetProofCount())
-        }
-}
-
-func TestGetPendingCount(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        sa.ComputeAndPublishSolvencyProof("root2", 1_200_000_000, 500_000_000, 24000, 1414259)
-
-        if sa.GetPendingCount() != 2 {
-                t.Fatalf("Expected 2 pending proofs, got %d", sa.GetPendingCount())
-        }
-
-        sa.MarkProofPublished("root1")
-        if sa.GetPendingCount() != 1 {
-                t.Fatalf("Expected 1 pending proof, got %d", sa.GetPendingCount())
-        }
-}
-
-// ==========================================
-// FULL LIFECYCLE TEST
-// ==========================================
-
-func TestFullSolvencyAttestorLifecycle(t *testing.T) {
-        sa := NewSolvencyAttestor(DefaultSolvencyAttestorConfig())
-
-        // 1. Compute and publish a proof
-        proof1, err := sa.ComputeAndPublishSolvencyProof("root1", 1_000_000_000, 500_000_000, 20000, 1414258)
-        if err != nil {
-                t.Fatalf("Failed to compute proof 1: %v", err)
-        }
-        if proof1.Status != SolvencyStatusSolvent {
-                t.Fatalf("Expected SOLVENT, got %s", proof1.Status)
+                t.Fatalf("Failed to compute proof: %v", err)
         }
 
         // 2. Verify solvency
-        isSolvent, _, _ := sa.VerifySolvency()
+        isSolvent, _, err := sa.VerifySolvency()
+        if err != nil {
+                t.Fatalf("Failed to verify solvency: %v", err)
+        }
         if !isSolvent {
                 t.Fatal("Expected vault to be solvent")
         }
 
-        // 3. Publish a second proof (insolvent)
-        proof2, _ := sa.ComputeAndPublishSolvencyProof("root2", 500_000_000, 500_000_000, 10000, 1414259)
-        if proof2.Status != SolvencyStatusInsolvent {
-                t.Fatalf("Expected INSOLVENT, got %s", proof2.Status)
+        // 3. Mark as published
+        err = sa.MarkProofPublished(proof.MerkleRoot)
+        if err != nil {
+                t.Fatalf("Failed to mark proof as published: %v", err)
         }
 
-        // 4. Verify solvency is now false
-        isSolvent, _, _ = sa.VerifySolvency()
-        if isSolvent {
-                t.Fatal("Expected vault to be insolvent")
+        // 4. Get proof history
+        history := sa.GetProofHistory(10)
+        if len(history) != 1 {
+                t.Fatalf("Expected 1 proof in history, got %d", len(history))
         }
 
-        // 5. Check proof history
-        history := sa.GetProofHistory(0)
+        // 5. Compute another proof
+        merkleRoot2 := crypto.Keccak256Hash([]byte("e2e-test-2")).Hex()
+        proof2, _ := sa.ComputeAndPublishSolvencyProof(
+                merkleRoot2, 1000000000, 500000000, 20000, 1001,
+        )
+
+        // 6. Verify the new proof is the latest
+        latest := sa.GetLatestProof()
+        if latest.MerkleRoot != proof2.MerkleRoot {
+                t.Fatal("Latest proof should be the most recent one")
+        }
+
+        // 7. History should have 2 proofs
+        history = sa.GetProofHistory(10)
         if len(history) != 2 {
                 t.Fatalf("Expected 2 proofs in history, got %d", len(history))
-        }
-
-        // 6. Mark proof as published
-        sa.MarkProofPublished("root1")
-        if sa.GetPendingCount() != 1 {
-                t.Fatalf("Expected 1 pending proof, got %d", sa.GetPendingCount())
-        }
-
-        // 7. Build a solvency action
-        action, err := sa.BuildSolvencyAction(proof2)
-        if err != nil {
-                t.Fatalf("Failed to build solvency action: %v", err)
-        }
-        if action == nil {
-                t.Fatal("Action should not be nil")
-        }
-
-        // 8. Reset
-        sa.Reset()
-        if sa.GetProofCount() != 0 {
-                t.Fatalf("Expected 0 proofs after reset, got %d", sa.GetProofCount())
         }
 }

@@ -16,12 +16,14 @@
 package attestation
 
 import (
-        "crypto/sha256"
-        "encoding/hex"
         "encoding/json"
         "fmt"
+        "math/big"
         "sync"
         "time"
+
+        "github.com/ethereum/go-ethereum/common"
+        "github.com/ethereum/go-ethereum/crypto"
 
         "github.com/flare-foundation/go-flare-common/pkg/logger"
 
@@ -314,22 +316,48 @@ func (sa *SolvencyAttestor) Reset() {
 // HELPER FUNCTIONS
 // ==========================================
 
-// verifyMerkleProof verifies a Merkle proof.
+// verifyMerkleProof verifies a Merkle proof using keccak256 with sorted left/right ordering.
+// This matches the Solidity SolvencyRoot._verifyMerkleProof function exactly.
 func verifyMerkleProof(leaf string, proof []string, root string) bool {
-        current := leaf
+        current := common.HexToHash(leaf)
         for _, sibling := range proof {
-                combined := current + sibling
-                hash := sha256.Sum256([]byte(combined))
-                current = hex.EncodeToString(hash[:])
+                siblingHash := common.HexToHash(sibling)
+                currentInt := new(big.Int).SetBytes(current[:])
+                siblingInt := new(big.Int).SetBytes(siblingHash[:])
+
+                if currentInt.Cmp(siblingInt) <= 0 {
+                        current = crypto.Keccak256Hash(append(current[:], siblingHash[:]...))
+                } else {
+                        current = crypto.Keccak256Hash(append(siblingHash[:], current[:]...))
+                }
         }
-        return current == root
+        return current == common.HexToHash(root)
 }
 
-// ComputeLeafHash computes the hash of a position leaf for Merkle proof verification.
+// ComputeLeafHash computes the keccak256 hash of a position leaf for Merkle proof verification.
+// This matches the Solidity contract's keccak256(abi.encodePacked(positionId, depositor, fxrpAmount, usdValuation)).
 func ComputeLeafHash(positionID uint64, depositor string, fxrpAmount uint64, usdValuation uint64) string {
-        data := fmt.Sprintf("%d|%s|%d|%d", positionID, depositor, fxrpAmount, usdValuation)
-        hash := sha256.Sum256([]byte(data))
-        return hex.EncodeToString(hash[:])
+        // Match Solidity: keccak256(abi.encodePacked(positionId, depositor, fxrpAmount, usdValuation))
+        depositorAddr := common.HexToAddress(depositor)
+        data := make([]byte, 0, 124) // 32 + 20 + 32 + 32 = 116 bytes
+
+        // positionId as uint256 (32 bytes big-endian)
+        positionIdBytes := common.LeftPadBytes(new(big.Int).SetUint64(positionID).Bytes(), 32)
+        data = append(data, positionIdBytes...)
+
+        // depositor as address (20 bytes)
+        data = append(data, depositorAddr.Bytes()...)
+
+        // fxrpAmount as uint256 (32 bytes big-endian)
+        fxrpBytes := common.LeftPadBytes(new(big.Int).SetUint64(fxrpAmount).Bytes(), 32)
+        data = append(data, fxrpBytes...)
+
+        // usdValuation as uint256 (32 bytes big-endian)
+        usdBytes := common.LeftPadBytes(new(big.Int).SetUint64(usdValuation).Bytes(), 32)
+        data = append(data, usdBytes...)
+
+        hash := crypto.Keccak256Hash(data)
+        return hash.Hex()
 }
 
 // BuildSolvencyAction builds an FCC action for solvency proof publication.

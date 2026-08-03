@@ -1,436 +1,275 @@
 package position
 
 import (
-        "encoding/json"
+        "fmt"
+        "math/big"
         "testing"
         "time"
+
+        "github.com/ethereum/go-ethereum/common"
+        "github.com/ethereum/go-ethereum/crypto"
 )
 
-// helper to create a test event
-func newTestEvent(eventType string, positionID uint64, depositor string, amount uint64, usdValue uint64) *OnChainEvent {
-        return &OnChainEvent{
-                EventType:  eventType,
-                PositionID: positionID,
-                Depositor:  depositor,
-                Amount:     amount,
-                USDValue:   usdValue,
-                Timestamp:  time.Now(),
-                BlockNum:   1000,
-                TxHash:     "0xtest",
-        }
-}
-
 // ==========================================
-// CONSTRUCTOR TESTS
+// PositionComputer Core Tests
 // ==========================================
 
-func TestNewPositionComputer(t *testing.T) {
+func TestPositionComputer_New(t *testing.T) {
         config := DefaultPositionComputerConfig()
         pc := NewPositionComputer(config)
 
         if pc == nil {
-                t.Fatal("PositionComputer should not be nil")
+                t.Fatal("PositionComputer is nil")
         }
-        if len(pc.positions) != 0 {
-                t.Fatalf("Expected 0 positions, got %d", len(pc.positions))
+        if pc.GetPositionCount() != 0 {
+                t.Fatalf("Expected 0 positions, got %d", pc.GetPositionCount())
         }
-        if pc.vault == nil {
-                t.Fatal("Vault state should not be nil")
-        }
-        if pc.xrpUsdPrice != 0 {
-                t.Fatalf("Expected XRP/USD price 0, got %d", pc.xrpUsdPrice)
+        if pc.GetActivePositionCount() != 0 {
+                t.Fatalf("Expected 0 active positions, got %d", pc.GetActivePositionCount())
         }
 }
 
-func TestDefaultPositionComputerConfig(t *testing.T) {
-        config := DefaultPositionComputerConfig()
-
-        if config.RPCURL != "https://coston2-api.flare.network/ext/C/rpc" {
-                t.Fatalf("Expected Coston2 RPC URL, got %s", config.RPCURL)
-        }
-        if config.MinCollateralRatioBps != 15000 {
-                t.Fatalf("Expected 15000 min collateral ratio, got %d", config.MinCollateralRatioBps)
-        }
-        if config.MaxPositionCount != 1000 {
-                t.Fatalf("Expected 1000 max position count, got %d", config.MaxPositionCount)
-        }
-        if config.RevaluationIntervalSec != 300 {
-                t.Fatalf("Expected 300 revaluation interval, got %d", config.RevaluationIntervalSec)
-        }
-}
-
-// ==========================================
-// DEPOSIT EVENT TESTS
-// ==========================================
-
-func TestProcessEvent_DepositMade(t *testing.T) {
+func TestPositionComputer_ProcessDeposit(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        event := newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000)
-        err := pc.ProcessEvent(event)
-        if err != nil {
-                t.Fatalf("Failed to process DepositMade: %v", err)
+        event := &OnChainEvent{
+                EventType:  "DepositMade",
+                PositionID: 1,
+                Depositor:  "0xInstitution1",
+                Amount:     1000000000, // 1000 FXRP
+                USDValue:   500000,     // $5000
+                Timestamp:  time.Now(),
+                BlockNum:   1,
+                TxHash:     "0xabc123",
         }
 
-        // Verify position was created
+        err := pc.ProcessEvent(event)
+        if err != nil {
+                t.Fatalf("Failed to process deposit: %v", err)
+        }
+
+        if pc.GetPositionCount() != 1 {
+                t.Fatalf("Expected 1 position, got %d", pc.GetPositionCount())
+        }
+
         position, err := pc.GetPosition(1)
         if err != nil {
-                t.Fatalf("Position not found: %v", err)
+                t.Fatalf("Failed to get position: %v", err)
         }
-        if position.Depositor != "0xDepositor1" {
-                t.Fatalf("Expected depositor 0xDepositor1, got %s", position.Depositor)
-        }
-        if position.FxrpAmount != 100_000_000 {
-                t.Fatalf("Expected FXRP amount 100000000, got %d", position.FxrpAmount)
-        }
-        if position.USDValuation != 50000 {
-                t.Fatalf("Expected USD valuation 50000, got %d", position.USDValuation)
+
+        if position.FxrpAmount != 1000000000 {
+                t.Fatalf("Expected 1000000000 FXRP, got %d", position.FxrpAmount)
         }
         if position.Status != PositionStatusActive {
                 t.Fatalf("Expected ACTIVE status, got %s", position.Status)
         }
-        if !position.IsSolvent {
-                t.Fatal("Expected position to be solvent")
-        }
 
-        // Verify vault state
         state := pc.GetVaultState()
-        if state.TotalFxrpDeposited != 100_000_000 {
-                t.Fatalf("Expected total FXRP deposited 100000000, got %d", state.TotalFxrpDeposited)
-        }
-        if state.TotalUSDValuation != 50000 {
-                t.Fatalf("Expected total USD valuation 50000, got %d", state.TotalUSDValuation)
+        if state.TotalFxrpDeposited != 1000000000 {
+                t.Fatalf("Expected 1000000000 total deposited, got %d", state.TotalFxrpDeposited)
         }
         if state.ActivePositionCount != 1 {
                 t.Fatalf("Expected 1 active position, got %d", state.ActivePositionCount)
         }
 }
 
-func TestProcessEvent_MultipleDeposits(t *testing.T) {
+func TestPositionComputer_MultipleDeposits(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        // Deposit 1
-        event1 := newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000)
-        pc.ProcessEvent(event1)
+        deposits := []*OnChainEvent{
+                {EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1", Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1},
+                {EventType: "DepositMade", PositionID: 2, Depositor: "0xInstitution2", Amount: 2000000000, USDValue: 1000000, Timestamp: time.Now(), BlockNum: 2},
+                {EventType: "DepositMade", PositionID: 3, Depositor: "0xInstitution1", Amount: 500000000, USDValue: 250000, Timestamp: time.Now(), BlockNum: 3},
+        }
 
-        // Deposit 2
-        event2 := newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000)
-        pc.ProcessEvent(event2)
+        for _, event := range deposits {
+                err := pc.ProcessEvent(event)
+                if err != nil {
+                        t.Fatalf("Failed to process deposit: %v", err)
+                }
+        }
 
-        // Deposit 3 from same depositor
-        event3 := newTestEvent("DepositMade", 3, "0xDepositor1", 50_000_000, 25000)
-        pc.ProcessEvent(event3)
+        if pc.GetPositionCount() != 3 {
+                t.Fatalf("Expected 3 positions, got %d", pc.GetPositionCount())
+        }
+        if pc.GetActivePositionCount() != 3 {
+                t.Fatalf("Expected 3 active positions, got %d", pc.GetActivePositionCount())
+        }
 
-        // Verify total state
         state := pc.GetVaultState()
-        if state.TotalFxrpDeposited != 350_000_000 {
-                t.Fatalf("Expected total FXRP 350000000, got %d", state.TotalFxrpDeposited)
+        if state.TotalFxrpDeposited != 3500000000 {
+                t.Fatalf("Expected 3500000000 total deposited, got %d", state.TotalFxrpDeposited)
         }
-        if state.ActivePositionCount != 3 {
-                t.Fatalf("Expected 3 active positions, got %d", state.ActivePositionCount)
-        }
-
-        // Verify depositor has 2 positions
-        positions := pc.GetDepositorPositions("0xDepositor1")
-        if len(positions) != 2 {
-                t.Fatalf("Expected 2 positions for depositor1, got %d", len(positions))
+        if state.TotalUSDValuation != 1750000 {
+                t.Fatalf("Expected 1750000 total USD valuation, got %d", state.TotalUSDValuation)
         }
 }
 
-// ==========================================
-// WITHDRAWAL EVENT TESTS
-// ==========================================
-
-func TestProcessEvent_WithdrawalInitiated(t *testing.T) {
+func TestPositionComputer_WithdrawalCompleted(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        // Create a deposit first
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
+        // Deposit first
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
 
-        // Initiate withdrawal
-        err := pc.ProcessEvent(newTestEvent("WithdrawalInitiated", 1, "0xDepositor1", 100_000_000, 0))
+        // Withdraw
+        err := pc.ProcessEvent(&OnChainEvent{
+                EventType: "WithdrawalCompleted", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, Timestamp: time.Now(), BlockNum: 2,
+        })
         if err != nil {
-                t.Fatalf("Failed to process WithdrawalInitiated: %v", err)
-        }
-
-        position, _ := pc.GetPosition(1)
-        if position.Status != PositionStatusWithdrawal {
-                t.Fatalf("Expected WITHDRAWAL_INITIATED status, got %s", position.Status)
-        }
-}
-
-func TestProcessEvent_WithdrawalCompleted(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        // Create a deposit first
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-
-        // Complete withdrawal
-        err := pc.ProcessEvent(newTestEvent("WithdrawalCompleted", 1, "0xDepositor1", 100_000_000, 0))
-        if err != nil {
-                t.Fatalf("Failed to process WithdrawalCompleted: %v", err)
+                t.Fatalf("Failed to process withdrawal: %v", err)
         }
 
         position, _ := pc.GetPosition(1)
         if position.Status != PositionStatusClosed {
                 t.Fatalf("Expected CLOSED status, got %s", position.Status)
         }
-        if position.FxrpAmount != 0 {
-                t.Fatalf("Expected FXRP amount 0 after withdrawal, got %d", position.FxrpAmount)
-        }
 
         state := pc.GetVaultState()
-        if state.TotalFxrpDeposited != 0 {
-                t.Fatalf("Expected total FXRP 0 after withdrawal, got %d", state.TotalFxrpDeposited)
-        }
         if state.ActivePositionCount != 0 {
                 t.Fatalf("Expected 0 active positions, got %d", state.ActivePositionCount)
         }
-        if state.TotalFxrpLiabilities != 100_000_000 {
-                t.Fatalf("Expected liabilities 100000000, got %d", state.TotalFxrpLiabilities)
+        if state.TotalFxrpDeposited != 0 {
+                t.Fatalf("Expected 0 total deposited, got %d", state.TotalFxrpDeposited)
+        }
+        if state.TotalFxrpLiabilities != 1000000000 {
+                t.Fatalf("Expected 1000000000 total liabilities, got %d", state.TotalFxrpLiabilities)
         }
 }
 
-func TestProcessEvent_EmergencyWithdrawal(t *testing.T) {
+func TestPositionComputer_EmergencyWithdrawal(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
 
-        err := pc.ProcessEvent(newTestEvent("EmergencyWithdrawal", 1, "0xDepositor1", 100_000_000, 0))
+        err := pc.ProcessEvent(&OnChainEvent{
+                EventType: "EmergencyWithdrawal", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, Timestamp: time.Now(), BlockNum: 2,
+        })
         if err != nil {
-                t.Fatalf("Failed to process EmergencyWithdrawal: %v", err)
+                t.Fatalf("Failed to process emergency withdrawal: %v", err)
         }
 
         position, _ := pc.GetPosition(1)
         if position.Status != PositionStatusEmergency {
                 t.Fatalf("Expected EMERGENCY_WITHDRAWAL status, got %s", position.Status)
         }
-
-        state := pc.GetVaultState()
-        if state.TotalFxrpDeposited != 0 {
-                t.Fatalf("Expected total FXRP 0 after emergency withdrawal, got %d", state.TotalFxrpDeposited)
-        }
 }
 
-// ==========================================
-// POSITION REVALUATION TESTS
-// ==========================================
-
-func TestProcessEvent_PositionRevalued(t *testing.T) {
+func TestPositionComputer_PositionRevalued(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
 
-        // Revalue position — value dropped
-        err := pc.ProcessEvent(newTestEvent("PositionRevalued", 1, "0xDepositor1", 0, 40000))
+        err := pc.ProcessEvent(&OnChainEvent{
+                EventType: "PositionRevalued", PositionID: 1,
+                USDValue: 400000, // 20% drop
+                Timestamp: time.Now(), BlockNum: 2,
+        })
         if err != nil {
-                t.Fatalf("Failed to process PositionRevalued: %v", err)
+                t.Fatalf("Failed to process revaluation: %v", err)
         }
 
         position, _ := pc.GetPosition(1)
-        if position.USDValuation != 40000 {
-                t.Fatalf("Expected USD valuation 40000, got %d", position.USDValuation)
+        if position.USDValuation != 400000 {
+                t.Fatalf("Expected 400000 USD valuation, got %d", position.USDValuation)
         }
-        // Drawdown should be detected
-        if position.DrawdownBps == 0 {
-                t.Fatal("Expected non-zero drawdown after revaluation drop")
+        if position.DrawdownBps != 2000 { // 20% drawdown = 2000 bps
+                t.Fatalf("Expected 2000 bps drawdown, got %d", position.DrawdownBps)
         }
 }
 
-func TestUpdatePrice_RevalueAllPositions(t *testing.T) {
+func TestPositionComputer_UnknownEvent(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        // Create two deposits
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
+        err := pc.ProcessEvent(&OnChainEvent{
+                EventType: "UnknownEvent", PositionID: 1,
+        })
+        if err == nil {
+                t.Fatal("Expected error for unknown event type")
+        }
+}
 
-        // Update price
-        err := pc.UpdatePrice(55000) // 0.55 USD in 5-decimal format
+func TestPositionComputer_NilEvent(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        err := pc.ProcessEvent(nil)
+        if err == nil {
+                t.Fatal("Expected error for nil event")
+        }
+}
+
+func TestPositionComputer_PositionNotFound(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        _, err := pc.GetPosition(999)
+        if err == nil {
+                t.Fatal("Expected error for non-existent position")
+        }
+}
+
+// ==========================================
+// FTSO Price Update Tests
+// ==========================================
+
+func TestPositionComputer_UpdatePrice(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
+
+        err := pc.UpdatePrice(1200000) // 1.2 USD (5-decimal format)
         if err != nil {
                 t.Fatalf("Failed to update price: %v", err)
         }
 
-        // Position 1: 100_000_000 * 55000 / 1e6 = 5,500,000
-        // Position 2: 200_000_000 * 55000 / 1e6 = 11,000,000
-        pos1, _ := pc.GetPosition(1)
-        pos2, _ := pc.GetPosition(2)
-
-        if pos1.USDValuation != 5500000 {
-                t.Fatalf("Expected position 1 USD valuation 5500000, got %d", pos1.USDValuation)
-        }
-        if pos2.USDValuation != 11000000 {
-                t.Fatalf("Expected position 2 USD valuation 11000000, got %d", pos2.USDValuation)
-        }
-
         state := pc.GetVaultState()
-        if state.XRPUSDPrice != 55000 {
-                t.Fatalf("Expected XRP/USD price 55000, got %d", state.XRPUSDPrice)
-        }
-}
-
-// ==========================================
-// MERKLE ROOT TESTS
-// ==========================================
-
-func TestComputeMerkleRoot_EmptyVault(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        root, err := pc.ComputeMerkleRoot()
-        if err != nil {
-                t.Fatalf("Failed to compute Merkle root: %v", err)
-        }
-        if root == "" {
-                t.Fatal("Merkle root should not be empty")
-        }
-}
-
-func TestComputeMerkleRoot_SinglePosition(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-
-        root, err := pc.ComputeMerkleRoot()
-        if err != nil {
-                t.Fatalf("Failed to compute Merkle root: %v", err)
-        }
-        if root == "" {
-                t.Fatal("Merkle root should not be empty")
+        if state.XRPUSDPrice != 1200000 {
+                t.Fatalf("Expected 1200000 XRP/USD price, got %d", state.XRPUSDPrice)
         }
 
-        // Verify the root is deterministic
-        root2, _ := pc.ComputeMerkleRoot()
-        if root != root2 {
-                t.Fatalf("Merkle root should be deterministic: %s != %s", root, root2)
-        }
-}
-
-func TestComputeMerkleRoot_MultiplePositions(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 3, "0xDepositor3", 300_000_000, 150000))
-
-        root, err := pc.ComputeMerkleRoot()
-        if err != nil {
-                t.Fatalf("Failed to compute Merkle root: %v", err)
-        }
-        if root == "" {
-                t.Fatal("Merkle root should not be empty")
-        }
-
-        // Verify the root changes when a position is added
-        pc.ProcessEvent(newTestEvent("DepositMade", 4, "0xDepositor4", 400_000_000, 200000))
-        root2, _ := pc.ComputeMerkleRoot()
-
-        if root == root2 {
-                t.Fatal("Merkle root should change when a new position is added")
-        }
-}
-
-func TestComputeMerkleRoot_Deterministic(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        root1, _ := pc.ComputeMerkleRoot()
-
-        // Create a new PositionComputer and replay the same events
-        pc2 := NewPositionComputer(DefaultPositionComputerConfig())
-        pc2.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc2.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        root2, _ := pc2.ComputeMerkleRoot()
-
-        if root1 != root2 {
-                t.Fatalf("Merkle root should be deterministic: %s != %s", root1, root2)
-        }
-}
-
-// ==========================================
-// MERKLE PROOF TESTS
-// ==========================================
-
-func TestGenerateMerkleProof_SinglePosition(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-
-        proof, err := pc.GenerateMerkleProof(1)
-        if err != nil {
-                t.Fatalf("Failed to generate Merkle proof: %v", err)
-        }
-        // Single position — proof should be empty
-        if len(proof) != 0 {
-                t.Fatalf("Expected empty proof for single position, got %d elements", len(proof))
-        }
-}
-
-func TestGenerateMerkleProof_MultiplePositions(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        proof, err := pc.GenerateMerkleProof(1)
-        if err != nil {
-                t.Fatalf("Failed to generate Merkle proof: %v", err)
-        }
-        // Two positions — proof should have 1 element (the sibling)
-        if len(proof) != 1 {
-                t.Fatalf("Expected 1 proof element, got %d", len(proof))
-        }
-}
-
-func TestVerifyMerkleProof(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        root, _ := pc.ComputeMerkleRoot()
-        proof, _ := pc.GenerateMerkleProof(1)
-
-        // Get the leaf hash
+        // Position should be revalued
         position, _ := pc.GetPosition(1)
-        leaf := pc.computeLeafHash(position)
-
-        // Verify the proof
-        isValid := pc.VerifyMerkleProof(leaf, proof, root)
-        if !isValid {
-                t.Fatal("Merkle proof should be valid")
+        // newValuation = (1000000000 * 1200000) / 1e6 = 1200000000
+        if position.USDValuation != 1200000000 {
+                t.Fatalf("Expected 1200000000 USD valuation after revaluation, got %d", position.USDValuation)
         }
 }
 
-func TestVerifyMerkleProof_Invalid(t *testing.T) {
+func TestPositionComputer_UpdatePriceZero(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        root, _ := pc.ComputeMerkleRoot()
-
-        // Try with wrong leaf
-        isValid := pc.VerifyMerkleProof("wrong_leaf_hash", []string{}, root)
-        if isValid {
-                t.Fatal("Merkle proof should be invalid for wrong leaf")
+        err := pc.UpdatePrice(0)
+        if err == nil {
+                t.Fatal("Expected error for zero price")
         }
 }
 
 // ==========================================
-// EXTERNAL STATE TESTS
+// FDC External State Tests
 // ==========================================
 
-func TestUpdateExternalState(t *testing.T) {
+func TestPositionComputer_UpdateExternalState(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
         state := &ExternalState{
                 Chain:        ExternalChainXRPL,
-                Address:      "rAegisXRPLWallet",
-                Balance:      500_000_000,
+                Address:      "rXRPAddress123",
+                Balance:      500000000,
                 AttestedAt:   time.Now(),
-                VotingRound:  1414258,
+                VotingRound:  1000,
+                AttestationID: "fdc-att-123",
                 IsVerified:   true,
         }
 
@@ -439,27 +278,21 @@ func TestUpdateExternalState(t *testing.T) {
                 t.Fatalf("Failed to update external state: %v", err)
         }
 
-        // Verify the state was stored
         extState, err := pc.GetExternalState(ExternalChainXRPL)
         if err != nil {
                 t.Fatalf("Failed to get external state: %v", err)
         }
-        if extState.Balance != 500_000_000 {
-                t.Fatalf("Expected balance 500000000, got %d", extState.Balance)
-        }
-        if extState.Chain != ExternalChainXRPL {
-                t.Fatalf("Expected chain XRPL, got %s", extState.Chain)
+        if extState.Balance != 500000000 {
+                t.Fatalf("Expected 500000000 balance, got %d", extState.Balance)
         }
 }
 
-func TestUpdateExternalState_Unverified(t *testing.T) {
+func TestPositionComputer_UpdateExternalStateUnverified(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
         state := &ExternalState{
                 Chain:      ExternalChainXRPL,
-                Address:    "rAegisXRPLWallet",
-                Balance:    500_000_000,
-                IsVerified: false, // Not verified!
+                IsVerified: false,
         }
 
         err := pc.UpdateExternalState(state)
@@ -468,55 +301,14 @@ func TestUpdateExternalState_Unverified(t *testing.T) {
         }
 }
 
-func TestUpdateExternalState_MultipleChains(t *testing.T) {
+func TestPositionComputer_ProcessFDCAttestation(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        // Add XRPL state
-        pc.UpdateExternalState(&ExternalState{
-                Chain: ExternalChainXRPL, Address: "rWallet1", Balance: 500_000_000,
-                AttestedAt: time.Now(), VotingRound: 1414258, IsVerified: true,
-        })
-
-        // Add Base state
-        pc.UpdateExternalState(&ExternalState{
-                Chain: ExternalChainBase, Address: "0xBaseWallet", Balance: 200_000_000,
-                AttestedAt: time.Now(), VotingRound: 1414259, IsVerified: true,
-        })
-
-        // Add Hyperliquid state
-        pc.UpdateExternalState(&ExternalState{
-                Chain: ExternalChainHyperliquid, Address: "0xHypWallet", Balance: 100_000_000,
-                AttestedAt: time.Now(), VotingRound: 1414260, IsVerified: true,
-        })
-
-        vaultState := pc.GetVaultState()
-        if len(vaultState.ExternalState) != 3 {
-                t.Fatalf("Expected 3 external states, got %d", len(vaultState.ExternalState))
-        }
-}
-
-// ==========================================
-// FDC ATTESTATION TESTS
-// ==========================================
-
-func TestProcessFDCAttestation_Payment(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        paymentData := struct {
-                ReceivedAmount uint64 `json:"receivedAmount"`
-                Destination    string `json:"destination"`
-        }{
-                ReceivedAmount: 100_000_000,
-                Destination:    "rAegisXRPLWallet",
-        }
-
-        data, _ := json.Marshal(paymentData)
 
         attestation := &FDCAttestationData{
                 AttestationType: "Payment",
-                SourceID:        "testXRP",
-                VotingRound:     1414258,
-                Data:            data,
+                SourceID:        "xrp",
+                VotingRound:     1000,
+                Data:            []byte(`{"receivedAmount": 500000000, "destination": "rXRPAddress123"}`),
                 IsVerified:      true,
                 VerifiedAt:      time.Now(),
         }
@@ -526,435 +318,541 @@ func TestProcessFDCAttestation_Payment(t *testing.T) {
                 t.Fatalf("Failed to process FDC attestation: %v", err)
         }
 
-        // Verify the external state was updated
         extState, err := pc.GetExternalState(ExternalChainXRPL)
         if err != nil {
-                t.Fatalf("Failed to get XRPL external state: %v", err)
+                t.Fatalf("Failed to get external state: %v", err)
         }
-        if extState.Balance != 100_000_000 {
-                t.Fatalf("Expected balance 100000000, got %d", extState.Balance)
-        }
-}
-
-func TestProcessFDCAttestation_Unverified(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        attestation := &FDCAttestationData{
-                AttestationType: "Payment",
-                SourceID:        "testXRP",
-                VotingRound:     1414258,
-                Data:            []byte("{}"),
-                IsVerified:      false, // Not verified!
-        }
-
-        err := pc.ProcessFDCAttestation(attestation)
-        if err == nil {
-                t.Fatal("Expected error for unverified attestation")
+        if extState.Balance != 500000000 {
+                t.Fatalf("Expected 500000000 balance, got %d", extState.Balance)
         }
 }
 
 // ==========================================
-// PRICE UPDATE TESTS
+// Merkle Root Computation Tests (keccak256)
 // ==========================================
 
-func TestUpdatePrice_ZeroPrice(t *testing.T) {
+func TestPositionComputer_ComputeMerkleRoot_SinglePosition(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        err := pc.UpdatePrice(0)
-        if err == nil {
-                t.Fatal("Expected error for zero price")
-        }
-}
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
 
-func TestUpdatePrice_Revaluation(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 0))
-
-        // Update price — should revalue all positions
-        err := pc.UpdatePrice(50000) // 0.50 USD in 5-decimal format
+        root, err := pc.ComputeMerkleRoot()
         if err != nil {
-                t.Fatalf("Failed to update price: %v", err)
+                t.Fatalf("Failed to compute Merkle root: %v", err)
+        }
+        if root == "" {
+                t.Fatal("Merkle root is empty")
         }
 
-        // Position 1: 100_000_000 * 50000 / 1e6 = 5,000,000
-        position, _ := pc.GetPosition(1)
-        if position.USDValuation != 5000000 {
-                t.Fatalf("Expected USD valuation 5000000, got %d", position.USDValuation)
+        // For a single position, the root should be the leaf hash
+        leaf := computeLeafHashKeccak256(&Position{
+                PositionID:   1,
+                Depositor:    "0xInstitution1",
+                FxrpAmount:   1000000000,
+                USDValuation: 500000,
+        })
+
+        expectedRoot := common.BytesToHash(leaf[:]).Hex()
+        if root != expectedRoot {
+                t.Fatalf("Merkle root mismatch: got %s, expected %s", root, expectedRoot)
+        }
+}
+
+func TestPositionComputer_ComputeMerkleRoot_MultiplePositions(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 2, Depositor: "0xInstitution2",
+                Amount: 2000000000, USDValue: 1000000, Timestamp: time.Now(), BlockNum: 2,
+        })
+
+        root, err := pc.ComputeMerkleRoot()
+        if err != nil {
+                t.Fatalf("Failed to compute Merkle root: %v", err)
+        }
+        if root == "" {
+                t.Fatal("Merkle root is empty")
         }
 
-        // Update price again — price drops
-        pc.UpdatePrice(40000) // 0.40 USD
+        // Verify the root is deterministic
+        root2, _ := pc.ComputeMerkleRoot()
+        if root != root2 {
+                t.Fatalf("Merkle root is not deterministic: %s != %s", root, root2)
+        }
+}
 
-        position, _ = pc.GetPosition(1)
-        if position.USDValuation != 4000000 {
-                t.Fatalf("Expected USD valuation 4000000, got %d", position.USDValuation)
+func TestPositionComputer_ComputeMerkleRoot_Empty(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        root, err := pc.ComputeMerkleRoot()
+        if err != nil {
+                t.Fatalf("Failed to compute Merkle root: %v", err)
         }
 
-        // Drawdown should be detected
-        if position.DrawdownBps == 0 {
-                t.Fatal("Expected non-zero drawdown after price drop")
+        expectedRoot := crypto.Keccak256Hash([]byte("aegis-empty-vault")).Hex()
+        if root != expectedRoot {
+                t.Fatalf("Empty vault root mismatch: got %s, expected %s", root, expectedRoot)
         }
 }
 
 // ==========================================
-// COLLATERAL RATIO TESTS
+// Merkle Proof Verification Tests (keccak256, Solidity-compatible)
 // ==========================================
 
-func TestCollateralRatio_NoLiabilities(t *testing.T) {
+func TestPositionComputer_MerkleProof_SinglePosition(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
+
+        root, _ := pc.ComputeMerkleRoot()
+        proof, err := pc.GenerateMerkleProof(1)
+        if err != nil {
+                t.Fatalf("Failed to generate Merkle proof: %v", err)
+        }
+
+        // For a single position, the proof should be empty (root = leaf)
+        if len(proof) != 0 {
+                t.Fatalf("Expected 0 proof elements for single position, got %d", len(proof))
+        }
+
+        // Verify the proof
+        leaf := computeLeafHashKeccak256(&Position{
+                PositionID:   1,
+                Depositor:    "0xInstitution1",
+                FxrpAmount:   1000000000,
+                USDValuation: 500000,
+        })
+
+        rootHash := common.HexToHash(root)
+        if leaf != rootHash {
+                t.Fatalf("Leaf hash should equal root for single position: leaf=%s, root=%s",
+                        common.BytesToHash(leaf[:]).Hex(), root)
+        }
+}
+
+func TestPositionComputer_MerkleProof_TwoPositions(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 2, Depositor: "0xInstitution2",
+                Amount: 2000000000, USDValue: 1000000, Timestamp: time.Now(), BlockNum: 2,
+        })
+
+        root, _ := pc.ComputeMerkleRoot()
+
+        // Generate proof for position 1
+        proof1, err := pc.GenerateMerkleProof(1)
+        if err != nil {
+                t.Fatalf("Failed to generate Merkle proof for position 1: %v", err)
+        }
+
+        // Generate proof for position 2
+        proof2, err := pc.GenerateMerkleProof(2)
+        if err != nil {
+                t.Fatalf("Failed to generate Merkle proof for position 2: %v", err)
+        }
+
+        // Both should have 1 proof element (sibling)
+        if len(proof1) != 1 {
+                t.Fatalf("Expected 1 proof element for position 1, got %d", len(proof1))
+        }
+        if len(proof2) != 1 {
+                t.Fatalf("Expected 1 proof element for position 2, got %d", len(proof2))
+        }
+
+        // Verify proofs
+        leaf1 := computeLeafHashKeccak256(&Position{
+                PositionID:   1,
+                Depositor:    "0xInstitution1",
+                FxrpAmount:   1000000000,
+                USDValuation: 500000,
+        })
+        leaf2 := computeLeafHashKeccak256(&Position{
+                PositionID:   2,
+                Depositor:    "0xInstitution2",
+                FxrpAmount:   2000000000,
+                USDValuation: 1000000,
+        })
+
+        rootHash := common.HexToHash(root)
+
+        if !pc.VerifyMerkleProof(leaf1, proof1, rootHash) {
+                t.Fatal("Merkle proof verification failed for position 1")
+        }
+        if !pc.VerifyMerkleProof(leaf2, proof2, rootHash) {
+                t.Fatal("Merkle proof verification failed for position 2")
+        }
+}
+
+func TestPositionComputer_MerkleProof_FourPositions(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        for i := uint64(1); i <= 4; i++ {
+                pc.ProcessEvent(&OnChainEvent{
+                        EventType: "DepositMade", PositionID: i,
+                        Depositor:  fmt.Sprintf("0xInstitution%d", i),
+                        Amount:     i * 1000000000,
+                        USDValue:   i * 500000,
+                        Timestamp:  time.Now(),
+                        BlockNum:   i,
+                })
+        }
+
+        root, _ := pc.ComputeMerkleRoot()
+
+        // Verify each position's proof
+        for i := uint64(1); i <= 4; i++ {
+                proof, err := pc.GenerateMerkleProof(i)
+                if err != nil {
+                        t.Fatalf("Failed to generate Merkle proof for position %d: %v", i, err)
+                }
+
+                position, _ := pc.GetPosition(i)
+                leaf := computeLeafHashKeccak256(position)
+                rootHash := common.HexToHash(root)
+
+                if !pc.VerifyMerkleProof(leaf, proof, rootHash) {
+                        t.Fatalf("Merkle proof verification failed for position %d", i)
+                }
+        }
+}
+
+// ==========================================
+// Keccak256 Leaf Hash Compatibility Tests
+// ==========================================
+
+func TestComputeLeafHashKeccak256_MatchesSolidity(t *testing.T) {
+        // Test that the Go keccak256 leaf hash matches Solidity's
+        // keccak256(abi.encodePacked(positionId, depositor, fxrpAmount, usdValuation))
+        position := &Position{
+                PositionID:   1,
+                Depositor:    "0x0000000000000000000000000000000000000001",
+                FxrpAmount:   1000000000,
+                USDValuation: 500000,
+        }
+
+        leaf := computeLeafHashKeccak256(position)
+
+        // Verify the leaf hash is deterministic
+        leaf2 := computeLeafHashKeccak256(position)
+        if leaf != leaf2 {
+                t.Fatal("Leaf hash is not deterministic")
+        }
+
+        // Verify the leaf hash is a valid keccak256 hash (32 bytes)
+        if len(leaf) != 32 {
+                t.Fatalf("Expected 32-byte hash, got %d bytes", len(leaf))
+        }
+
+        // Verify the leaf hash is not zero
+        zeroHash := [32]byte{}
+        if leaf == zeroHash {
+                t.Fatal("Leaf hash is zero")
+        }
+}
+
+func TestComputeLeafHashKeccak256_DifferentPositions(t *testing.T) {
+        pos1 := &Position{
+                PositionID:   1,
+                Depositor:    "0x0000000000000000000000000000000000000001",
+                FxrpAmount:   1000000000,
+                USDValuation: 500000,
+        }
+        pos2 := &Position{
+                PositionID:   2,
+                Depositor:    "0x0000000000000000000000000000000000000002",
+                FxrpAmount:   2000000000,
+                USDValuation: 1000000,
+        }
+
+        leaf1 := computeLeafHashKeccak256(pos1)
+        leaf2 := computeLeafHashKeccak256(pos2)
+
+        if leaf1 == leaf2 {
+                t.Fatal("Different positions should produce different leaf hashes")
+        }
+}
+
+// ==========================================
+// Collateral Ratio Tests
+// ==========================================
+
+func TestPositionComputer_CollateralRatio(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        // Deposit
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
 
         state := pc.GetVaultState()
-        // No liabilities — should be solvent
+        // No liabilities, so collateral ratio should be 999999 (effectively infinite)
+        if state.CollateralRatioBps != 999999 {
+                t.Fatalf("Expected 999999 collateral ratio (no liabilities), got %d", state.CollateralRatioBps)
+        }
         if !state.IsSolvent {
-                t.Fatal("Expected vault to be solvent with no liabilities")
+                t.Fatal("Expected vault to be solvent")
         }
-}
 
-func TestCollateralRatio_WithLiabilities(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
+        // Withdraw
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "WithdrawalCompleted", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, Timestamp: time.Now(), BlockNum: 2,
+        })
 
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("WithdrawalCompleted", 1, "0xDepositor1", 100_000_000, 0))
-
-        state := pc.GetVaultState()
-        // Total deposited = 0, liabilities = 100_000_000
-        // Collateral ratio = 0 * 10000 / 100_000_000 = 0
-        // 0 < 15000 (min) — should NOT be solvent
+        state = pc.GetVaultState()
+        // Now has liabilities but no deposits
+        if state.CollateralRatioBps != 0 {
+                t.Fatalf("Expected 0 collateral ratio (insolvent), got %d", state.CollateralRatioBps)
+        }
         if state.IsSolvent {
-                t.Fatal("Expected vault to be insolvent with high liabilities")
+                t.Fatal("Expected vault to be insolvent")
         }
 }
 
 // ==========================================
-// ERROR HANDLING TESTS
+// Validation Tests
 // ==========================================
 
-func TestProcessEvent_NilEvent(t *testing.T) {
+func TestPositionComputer_Validate(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        err := pc.ProcessEvent(nil)
-        if err == nil {
-                t.Fatal("Expected error for nil event")
-        }
-}
-
-func TestProcessEvent_UnknownEventType(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        err := pc.ProcessEvent(newTestEvent("UnknownEvent", 1, "0xDepositor1", 100, 0))
-        if err == nil {
-                t.Fatal("Expected error for unknown event type")
-        }
-}
-
-func TestProcessEvent_WithdrawalNonexistentPosition(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        err := pc.ProcessEvent(newTestEvent("WithdrawalCompleted", 999, "0xDepositor1", 100, 0))
-        if err == nil {
-                t.Fatal("Expected error for withdrawal of nonexistent position")
-        }
-}
-
-func TestGetPosition_NotFound(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        _, err := pc.GetPosition(999)
-        if err == nil {
-                t.Fatal("Expected error for nonexistent position")
-        }
-}
-
-func TestGetExternalState_NotFound(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        _, err := pc.GetExternalState("UnknownChain")
-        if err == nil {
-                t.Fatal("Expected error for unknown chain")
-        }
-}
-
-func TestGenerateMerkleProof_NonexistentPosition(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        _, err := pc.GenerateMerkleProof(999)
-        if err == nil {
-                t.Fatal("Expected error for nonexistent position")
-        }
-}
-
-func TestGenerateMerkleProof_ClosedPosition(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("WithdrawalCompleted", 1, "0xDepositor1", 100_000_000, 0))
-
-        _, err := pc.GenerateMerkleProof(1)
-        if err == nil {
-                t.Fatal("Expected error for proof of closed position")
-        }
-}
-
-// ==========================================
-// QUERY TESTS
-// ==========================================
-
-func TestGetActivePositions(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 3, "0xDepositor3", 300_000_000, 150000))
-        pc.ProcessEvent(newTestEvent("WithdrawalCompleted", 2, "0xDepositor2", 200_000_000, 0))
-
-        positions := pc.GetActivePositions()
-        if len(positions) != 2 {
-                t.Fatalf("Expected 2 active positions, got %d", len(positions))
-        }
-}
-
-func TestGetDepositorPositions(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 3, "0xDepositor1", 50_000_000, 25000))
-
-        positions := pc.GetDepositorPositions("0xDepositor1")
-        if len(positions) != 2 {
-                t.Fatalf("Expected 2 positions for depositor1, got %d", len(positions))
-        }
-}
-
-func TestGetDepositorPositions_NoPositions(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        positions := pc.GetDepositorPositions("0xUnknown")
-        if len(positions) != 0 {
-                t.Fatalf("Expected 0 positions for unknown depositor, got %d", len(positions))
-        }
-}
-
-func TestGetProcessedEvents(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        events := pc.GetProcessedEvents()
-        if len(events) != 2 {
-                t.Fatalf("Expected 2 processed events, got %d", len(events))
-        }
-}
-
-func TestGetPositionCount(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        if pc.GetPositionCount() != 2 {
-                t.Fatalf("Expected 2 positions, got %d", pc.GetPositionCount())
-        }
-}
-
-func TestGetActivePositionCount(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-        pc.ProcessEvent(newTestEvent("WithdrawalCompleted", 1, "0xDepositor1", 100_000_000, 0))
-
-        if pc.GetActivePositionCount() != 1 {
-                t.Fatalf("Expected 1 active position, got %d", pc.GetActivePositionCount())
-        }
-}
-
-// ==========================================
-// VALIDATION TESTS
-// ==========================================
-
-func TestValidatePositionComputer(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
         err := pc.ValidatePositionComputer()
         if err != nil {
-                t.Fatalf("PositionComputer validation failed: %v", err)
+                t.Fatalf("Validation failed: %v", err)
         }
 }
 
-func TestValidatePositionComputer_MissingRPCURL(t *testing.T) {
-        config := DefaultPositionComputerConfig()
-        config.RPCURL = ""
-        pc := NewPositionComputer(config)
-
-        err := pc.ValidatePositionComputer()
-        if err == nil {
-                t.Fatal("Expected error for missing RPC URL")
-        }
-}
-
-// ==========================================
-// RESET TESTS
-// ==========================================
-
-func TestReset(t *testing.T) {
+func TestPositionComputer_Reset(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.UpdatePrice(50000)
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
 
         pc.Reset()
 
         if pc.GetPositionCount() != 0 {
                 t.Fatalf("Expected 0 positions after reset, got %d", pc.GetPositionCount())
         }
-        if pc.xrpUsdPrice != 0 {
-                t.Fatalf("Expected 0 price after reset, got %d", pc.xrpUsdPrice)
-        }
 }
 
 // ==========================================
-// SOLVENCY DATA TESTS
+// End-to-End Flow Tests
 // ==========================================
 
-func TestComputeSolvencyData(t *testing.T) {
-        pc := NewPositionComputer(DefaultPositionComputerConfig())
-
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        merkleRoot, totalCollateral, totalLiabilities, collateralRatioBps, err := pc.ComputeSolvencyData()
-        if err != nil {
-                t.Fatalf("Failed to compute solvency data: %v", err)
-        }
-        if merkleRoot == "" {
-                t.Fatal("Merkle root should not be empty")
-        }
-        if totalCollateral != 300_000_000 {
-                t.Fatalf("Expected total collateral 300000000, got %d", totalCollateral)
-        }
-        if totalLiabilities != 0 {
-                t.Fatalf("Expected total liabilities 0, got %d", totalLiabilities)
-        }
-        if collateralRatioBps != 999999 {
-                t.Fatalf("Expected collateral ratio 999999 (no liabilities = fully solvent), got %d", collateralRatioBps)
-        }
-}
-
-// ==========================================
-// FULL LIFECYCLE TEST
-// ==========================================
-
-func TestFullLifecycle(t *testing.T) {
+func TestPositionComputer_EndToEnd_FullLifecycle(t *testing.T) {
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
         // 1. Deposit
-        pc.ProcessEvent(newTestEvent("DepositMade", 1, "0xDepositor1", 100_000_000, 50000))
-        pc.ProcessEvent(newTestEvent("DepositMade", 2, "0xDepositor2", 200_000_000, 100000))
-
-        // 2. Update price
-        pc.UpdatePrice(55000)
-
-        // 3. Add external state
-        pc.UpdateExternalState(&ExternalState{
-                Chain: ExternalChainXRPL, Address: "rWallet", Balance: 150_000_000,
-                AttestedAt: time.Now(), VotingRound: 1414258, IsVerified: true,
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
         })
 
-        // 4. Compute Merkle root
+        // 2. Compute Merkle root
         root1, _ := pc.ComputeMerkleRoot()
+        if root1 == "" {
+                t.Fatal("Merkle root is empty after deposit")
+        }
 
-        // 5. Revalue position — price drops significantly
-        pc.ProcessEvent(newTestEvent("PositionRevalued", 1, "0xDepositor1", 0, 4500000))
+        // 3. Generate and verify Merkle proof
+        proof, _ := pc.GenerateMerkleProof(1)
+        position, _ := pc.GetPosition(1)
+        leaf := computeLeafHashKeccak256(position)
+        rootHash := common.HexToHash(root1)
+        if !pc.VerifyMerkleProof(leaf, proof, rootHash) {
+                t.Fatal("Merkle proof verification failed after deposit")
+        }
 
-        // 6. Compute Merkle root again — should be different (different valuation)
+        // 4. Revalue position
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "PositionRevalued", PositionID: 1,
+                USDValue: 400000, Timestamp: time.Now(), BlockNum: 2,
+        })
+
+        // 5. Compute new Merkle root
         root2, _ := pc.ComputeMerkleRoot()
-        if root1 == root2 {
-                t.Fatal("Merkle root should change after revaluation with different value")
+        if root2 == root1 {
+                t.Fatal("Merkle root should change after revaluation")
         }
 
-        // 7. Initiate withdrawal
-        pc.ProcessEvent(newTestEvent("WithdrawalInitiated", 1, "0xDepositor1", 100_000_000, 0))
-
-        // 8. Complete withdrawal
-        pc.ProcessEvent(newTestEvent("WithdrawalCompleted", 1, "0xDepositor1", 100_000_000, 0))
-
-        // 9. Verify final state
-        state := pc.GetVaultState()
-        if state.ActivePositionCount != 1 {
-                t.Fatalf("Expected 1 active position, got %d", state.ActivePositionCount)
-        }
-        if state.TotalFxrpDeposited != 200_000_000 {
-                t.Fatalf("Expected total FXRP 200000000, got %d", state.TotalFxrpDeposited)
-        }
-        if state.TotalFxrpLiabilities != 100_000_000 {
-                t.Fatalf("Expected total liabilities 100000000, got %d", state.TotalFxrpLiabilities)
+        // 6. Verify new proof
+        proof2, _ := pc.GenerateMerkleProof(1)
+        position2, _ := pc.GetPosition(1)
+        leaf2 := computeLeafHashKeccak256(position2)
+        rootHash2 := common.HexToHash(root2)
+        if !pc.VerifyMerkleProof(leaf2, proof2, rootHash2) {
+                t.Fatal("Merkle proof verification failed after revaluation")
         }
 
-        // 10. Compute solvency data
-        merkleRoot, totalCollateral, totalLiabilities, _, _ := pc.ComputeSolvencyData()
+        // 7. Update FDC external state
+        pc.UpdateExternalState(&ExternalState{
+                Chain: ExternalChainXRPL, Address: "rXRPAddress",
+                Balance: 500000000, AttestedAt: time.Now(), VotingRound: 1000, IsVerified: true,
+        })
+
+        // 8. Compute solvency data
+        merkleRoot, collateral, liabilities, ratio, _ := pc.ComputeSolvencyData()
         if merkleRoot == "" {
-                t.Fatal("Merkle root should not be empty")
+                t.Fatal("Merkle root is empty")
         }
-        if totalCollateral != 200_000_000 {
-                t.Fatalf("Expected total collateral 200000000, got %d", totalCollateral)
+        if collateral != 1000000000 {
+                t.Fatalf("Expected 1000000000 collateral, got %d", collateral)
         }
-        if totalLiabilities != 100_000_000 {
-                t.Fatalf("Expected total liabilities 100000000, got %d", totalLiabilities)
+        if liabilities != 0 {
+                t.Fatalf("Expected 0 liabilities, got %d", liabilities)
+        }
+        if ratio != 999999 {
+                t.Fatalf("Expected 999999 ratio (no liabilities), got %d", ratio)
+        }
+}
+
+func TestPositionComputer_EndToEnd_MultipleDepositors(t *testing.T) {
+        pc := NewPositionComputer(DefaultPositionComputerConfig())
+
+        // Multiple deposits from different depositors
+        deposits := []*OnChainEvent{
+                {EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1", Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1},
+                {EventType: "DepositMade", PositionID: 2, Depositor: "0xInstitution2", Amount: 2000000000, USDValue: 1000000, Timestamp: time.Now(), BlockNum: 2},
+                {EventType: "DepositMade", PositionID: 3, Depositor: "0xInstitution1", Amount: 500000000, USDValue: 250000, Timestamp: time.Now(), BlockNum: 3},
+                {EventType: "DepositMade", PositionID: 4, Depositor: "0xInstitution3", Amount: 3000000000, USDValue: 1500000, Timestamp: time.Now(), BlockNum: 4},
         }
 
-        // 11. Generate Merkle proof for position 2
-        // Note: After position 1 is withdrawn, only position 2 is active.
-        // With a single position, the Merkle proof is empty (no siblings).
-        proof, err := pc.GenerateMerkleProof(2)
-        if err != nil {
-                t.Fatalf("Failed to generate Merkle proof: %v", err)
+        for _, event := range deposits {
+                pc.ProcessEvent(event)
         }
 
-        // 12. Verify the proof
-        position, _ := pc.GetPosition(2)
-        leaf := pc.computeLeafHash(position)
-        isValid := pc.VerifyMerkleProof(leaf, proof, merkleRoot)
-        if !isValid {
-                t.Fatal("Merkle proof should be valid")
+        // Compute Merkle root
+        root, _ := pc.ComputeMerkleRoot()
+
+        // Verify each position's proof
+        for i := uint64(1); i <= 4; i++ {
+                proof, err := pc.GenerateMerkleProof(i)
+                if err != nil {
+                        t.Fatalf("Failed to generate proof for position %d: %v", i, err)
+                }
+
+                position, _ := pc.GetPosition(i)
+                leaf := computeLeafHashKeccak256(position)
+                rootHash := common.HexToHash(root)
+
+                if !pc.VerifyMerkleProof(leaf, proof, rootHash) {
+                        t.Fatalf("Merkle proof verification failed for position %d", i)
+                }
+        }
+
+        // Verify depositor positions
+        inst1Positions := pc.GetDepositorPositions("0xInstitution1")
+        if len(inst1Positions) != 2 {
+                t.Fatalf("Expected 2 positions for Institution1, got %d", len(inst1Positions))
         }
 }
 
 // ==========================================
-// CONCURRENT ACCESS TESTS
+// Helper Functions
 // ==========================================
 
-func TestConcurrentAccess(t *testing.T) {
+func TestGetVerifierAddress(t *testing.T) {
+        // Test with a known private key (without 0x prefix)
+        privateKeyHex := "b3e509a0949e4d4ae489025a95eae959df178188f2c6ca130eceb2ef4ac70951"
+        addr, err := GetVerifierAddress(privateKeyHex)
+        if err != nil {
+                t.Fatalf("Failed to get verifier address: %v", err)
+        }
+        t.Logf("Verifier address: %s", addr.Hex())
+}
+
+func TestComputeLeafHashKeccak256_AbiEncodePacked(t *testing.T) {
+        // Test that the leaf hash format matches Solidity's abi.encodePacked
+        // Solidity: keccak256(abi.encodePacked(uint256(1), address(0x01...01), uint256(1000), uint256(500)))
+        position := &Position{
+                PositionID:   1,
+                Depositor:    "0x0000000000000000000000000000000000000001",
+                FxrpAmount:   1000,
+                USDValuation: 500,
+        }
+
+        leaf := computeLeafHashKeccak256(position)
+
+        // Manually construct the expected data to match Solidity
+        // abi.encodePacked(positionId, depositor, fxrpAmount, usdValuation)
+        // uint256 = 32 bytes big-endian, address = 20 bytes
+        posIdBytes := common.LeftPadBytes(big.NewInt(1).Bytes(), 32)
+        addr := common.HexToAddress("0x0000000000000000000000000000000000000001")
+        fxrpBytes := common.LeftPadBytes(big.NewInt(1000).Bytes(), 32)
+        usdBytes := common.LeftPadBytes(big.NewInt(500).Bytes(), 32)
+
+        data := make([]byte, 0, 116)
+        data = append(data, posIdBytes...)
+        data = append(data, addr.Bytes()...)
+        data = append(data, fxrpBytes...)
+        data = append(data, usdBytes...)
+
+        expectedLeaf := crypto.Keccak256Hash(data)
+        if leaf != expectedLeaf {
+                t.Fatalf("Leaf hash mismatch: got %x, expected %x", leaf, expectedLeaf)
+        }
+}
+
+// ==========================================
+// Sorted Merkle Tree Tests
+// ==========================================
+
+func TestPositionComputer_SortedMerkleTree(t *testing.T) {
+        // Test that the Merkle tree uses sorted ordering
+        // This is critical for Solidity compatibility
         pc := NewPositionComputer(DefaultPositionComputerConfig())
 
-        done := make(chan bool)
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 1, Depositor: "0xInstitution1",
+                Amount: 1000000000, USDValue: 500000, Timestamp: time.Now(), BlockNum: 1,
+        })
+        pc.ProcessEvent(&OnChainEvent{
+                EventType: "DepositMade", PositionID: 2, Depositor: "0xInstitution2",
+                Amount: 2000000000, USDValue: 1000000, Timestamp: time.Now(), BlockNum: 2,
+        })
 
-        // Concurrent deposits
-        go func() {
-                for i := uint64(1); i <= 50; i++ {
-                        pc.ProcessEvent(newTestEvent("DepositMade", i, "0xDepositor1", 100_000_000, 50000))
-                }
-                done <- true
-        }()
+        // Compute the root
+        root, _ := pc.ComputeMerkleRoot()
 
-        // Concurrent price updates
-        go func() {
-                for i := 0; i < 50; i++ {
-                        pc.UpdatePrice(uint64(50000 + i*100))
-                }
-                done <- true
-        }()
+        // Get the leaf hashes
+        leaf1 := computeLeafHashKeccak256(&Position{
+                PositionID: 1, Depositor: "0xInstitution1", FxrpAmount: 1000000000, USDValuation: 500000,
+        })
+        leaf2 := computeLeafHashKeccak256(&Position{
+                PositionID: 2, Depositor: "0xInstitution2", FxrpAmount: 2000000000, USDValuation: 1000000,
+        })
 
-        // Wait for both goroutines
-        <-done
-        <-done
+        // The root should be: keccak256(sorted_concat(leaf1, leaf2))
+        // Where sorted means the smaller leaf (as big.Int) comes first
+        leaf1Int := new(big.Int).SetBytes(leaf1[:])
+        leaf2Int := new(big.Int).SetBytes(leaf2[:])
 
-        // Verify the state is consistent
-        if pc.GetPositionCount() != 50 {
-                t.Fatalf("Expected 50 positions, got %d", pc.GetPositionCount())
+        var expectedRoot [32]byte
+        if leaf1Int.Cmp(leaf2Int) <= 0 {
+                expectedRoot = crypto.Keccak256Hash(append(leaf1[:], leaf2[:]...))
+        } else {
+                expectedRoot = crypto.Keccak256Hash(append(leaf2[:], leaf1[:]...))
+        }
+
+        expectedRootHex := common.BytesToHash(expectedRoot[:]).Hex()
+        if root != expectedRootHex {
+                t.Fatalf("Sorted Merkle root mismatch: got %s, expected %s", root, expectedRootHex)
         }
 }

@@ -6,12 +6,14 @@ import { PMWValidator } from "../src/PMWValidator.sol";
 
 /// @title PMWValidatorForkTest
 /// @notice Fork tests that run against Coston2 to validate PMW capabilities.
-/// Run with: forge test --match-contract PMWValidatorForkTest --fork-url https://coston2-api.flare.network/ext/C/rpc
 contract PMWValidatorForkTest is Test {
     // FCC Diamond address on Coston2
     address constant FCC_DIAMOND = 0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE;
+    string constant COSTON2_RPC = "https://coston2-api.flare.network/ext/C/rpc";
 
     PMWValidator public validator;
+
+    uint256 forkId;
 
     // forge-lint: disable-next-line(unsafe-typecast)
     bytes32 constant KEY_TYPE_XRP = bytes32("XRP");
@@ -19,6 +21,10 @@ contract PMWValidatorForkTest is Test {
     bytes32 constant SIGNING_ALGO_XRPL = bytes32("sha512half-secp256k1-ecdsa");
 
     function setUp() public {
+        // Create a fork of Coston2
+        forkId = vm.createFork(COSTON2_RPC);
+        vm.selectFork(forkId);
+
         // Create validator pointing to the real FCC diamond
         validator = new PMWValidator(FCC_DIAMOND);
     }
