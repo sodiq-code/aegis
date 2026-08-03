@@ -1,0 +1,36 @@
+{
+  "task": "Task 18 (Day 18): M3 checkpoint",
+  "description": "M3 on-chain solvency proof published on Coston2",
+  "timestamp": "2026-08-03T04:20:55Z",
+  "network": "coston2",
+  "chainId": 114,
+  "transactionHash": "0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481",
+  "blockNumber": 33565198,
+  "gasUsed": 271804,
+  "status": "success",
+  "contractAddress": "0xf52c1fd632d853ee46a48a82064d3f5d390f057d",
+  "publisher": "0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4",
+  "events": {
+    "SolvencyStatusUpdated": {
+      "collateralRatio": 14000,
+      "collateralRatioPct": "140%",
+      "minRatio": 15000,
+      "minRatioPct": "150%",
+      "status": "WARNING",
+      "timestamp": 1785730857
+    },
+    "SolvencyProofPublished": {
+      "merkleRoot": "0x93041e047f6688a8bf87014abc061c9650a11659e2efb1f0cedc2ce75dc9c173",
+      "publisher": "0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4",
+      "collateralRatio": 14000,
+      "collateralRatioPct": "140%",
+      "timestamp": 1785730855
+    }
+  },
+  "ftsoPrice": {
+    "feed": "XRP/USD",
+    "priceRaw": 1070808,
+    "priceUSD": 1.070808,
+    "source": "FtsoV2 on Coston2"
+  }
+}

@@ -1,0 +1,385 @@
+{
+  "task": "Task 18 (Day 18): M3 checkpoint; demo path proven end-to-end",
+  "timestamp": "2026-08-03T04:21:58Z",
+  "m3_sign_off": true,
+  "total_checks": 74,
+  "passed": 74,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "Coston2 RPC reachable",
+      "status": "PASS",
+      "detail": "chain_id=114"
+    },
+    {
+      "name": "Chain ID is 114 (Coston2)",
+      "status": "PASS",
+      "detail": "chain_id=114"
+    },
+    {
+      "name": "Deployer has CFLR balance",
+      "status": "PASS",
+      "detail": "59.66 CFLR"
+    },
+    {
+      "name": "VaultCore deployed",
+      "status": "PASS",
+      "detail": "addr=0xcb08be1cc86d3f94c54c64682372e32f669134bc"
+    },
+    {
+      "name": "VerifierRole deployed",
+      "status": "PASS",
+      "detail": "addr=0xb513516d02d88be754c5204e132defbb0f4156e6"
+    },
+    {
+      "name": "PolicyRegistry deployed",
+      "status": "PASS",
+      "detail": "addr=0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5"
+    },
+    {
+      "name": "SolvencyRoot deployed",
+      "status": "PASS",
+      "detail": "addr=0xf52c1fd632d853ee46a48a82064d3f5d390f057d"
+    },
+    {
+      "name": "InstructionSender deployed",
+      "status": "PASS",
+      "detail": "addr=0xb175f16e1cea66360e354db4b178c04c69363c06"
+    },
+    {
+      "name": "FDCAttestor deployed",
+      "status": "PASS",
+      "detail": "addr=0x266a9537eaa76264c926541a77c2705f659ba4f1"
+    },
+    {
+      "name": "PMWInstructionRelay deployed",
+      "status": "PASS",
+      "detail": "addr=0xce23e1a26c41eaa305f69d9150d9ac82d8b30743"
+    },
+    {
+      "name": "FlareSystemsManager accessible",
+      "status": "PASS",
+      "detail": "addr=0xA90Db6D10F856799b10ef2A77EBCbF460aC71e52"
+    },
+    {
+      "name": "FdcHub accessible",
+      "status": "PASS",
+      "detail": "addr=0x48aC463d7975828989331F4De43341627b9c5f1D"
+    },
+    {
+      "name": "FdcVerification accessible",
+      "status": "PASS",
+      "detail": "addr=0x906507E0B64bcD494Db73bd0459d1C667e14B933"
+    },
+    {
+      "name": "FdcRequestFeeConfigs accessible",
+      "status": "PASS",
+      "detail": "addr=0x191a1282Ac700edE65c5B0AaF313BAcC3eA7fC7e"
+    },
+    {
+      "name": "FtsoV2 accessible",
+      "status": "PASS",
+      "detail": "addr=0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d"
+    },
+    {
+      "name": "PMWDiamond accessible",
+      "status": "PASS",
+      "detail": "addr=0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE"
+    },
+    {
+      "name": "Fdc2Hub accessible",
+      "status": "PASS",
+      "detail": "addr=0x04dd3Ba33aC798d400bEc42A26F82f9812A421dc"
+    },
+    {
+      "name": "Fdc2Verification accessible",
+      "status": "PASS",
+      "detail": "addr=0xA34Ff9be42b2C7782786270a51d33b1baC0462Cd"
+    },
+    {
+      "name": "FlareTeeManager accessible",
+      "status": "PASS",
+      "detail": "addr=0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE"
+    },
+    {
+      "name": "VaultCore contract code exists",
+      "status": "PASS",
+      "detail": "addr=0xcb08be1cc86d3f94c54c64682372e32f669134bc"
+    },
+    {
+      "name": "VaultCore config initialized",
+      "status": "PASS",
+      "detail": "all 7 addresses + 3 params set"
+    },
+    {
+      "name": "Foundry tests pass",
+      "status": "PASS",
+      "detail": "Foundry output checked"
+    },
+    {
+      "name": "All Foundry suites pass",
+      "status": "PASS",
+      "detail": "9 suites, 143 tests passed, 0 failed"
+    },
+    {
+      "name": "Go tests pass",
+      "status": "PASS",
+      "detail": "13 packages ok, 0 failed"
+    },
+    {
+      "name": "E2E: Deposit \u2192 Risk \u2192 Rebalance \u2192 Attestation",
+      "status": "PASS",
+      "detail": "full flow passes"
+    },
+    {
+      "name": "E2E step: DepositStep",
+      "status": "PASS",
+      "detail": "PASS"
+    },
+    {
+      "name": "E2E step: RiskEventStep",
+      "status": "PASS",
+      "detail": "PASS"
+    },
+    {
+      "name": "E2E step: PolicyCheckStep",
+      "status": "PASS",
+      "detail": "PASS"
+    },
+    {
+      "name": "E2E step: PMWRebalanceStep",
+      "status": "PASS",
+      "detail": "PASS"
+    },
+    {
+      "name": "E2E step: SolvencyAttestationStep",
+      "status": "PASS",
+      "detail": "PASS"
+    },
+    {
+      "name": "E2E step: AgentLoopIntegration",
+      "status": "PASS",
+      "detail": "PASS"
+    },
+    {
+      "name": "E2E step: FDCBridgeIntegration",
+      "status": "PASS",
+      "detail": "PASS"
+    },
+    {
+      "name": "Failure mode: TEE down",
+      "status": "PASS",
+      "detail": "vault enters safe state"
+    },
+    {
+      "name": "Failure mode: PMW failure",
+      "status": "PASS",
+      "detail": "cross-chain paused, on-chain continues"
+    },
+    {
+      "name": "Failure mode: FDC delay",
+      "status": "PASS",
+      "detail": "circuit breaker trips, safe state"
+    },
+    {
+      "name": "FCC extension: deposit processing",
+      "status": "PASS",
+      "detail": "PositionComputer processes deposits"
+    },
+    {
+      "name": "FCC extension: rebalance processing",
+      "status": "PASS",
+      "detail": "ActionExecutor executes rebalance"
+    },
+    {
+      "name": "FCC extension: attestation processing",
+      "status": "PASS",
+      "detail": "SolvencyAttestor computes proof"
+    },
+    {
+      "name": "FCC extension: risk agent loop",
+      "status": "PASS",
+      "detail": "RiskAgent runs observe\u2192score\u2192decide\u2192act\u2192attest"
+    },
+    {
+      "name": "FCC extension: policy enforcement",
+      "status": "PASS",
+      "detail": "PolicyEngine validates actions"
+    },
+    {
+      "name": "FCC extension: FDC attestation bridge",
+      "status": "PASS",
+      "detail": "FDCPositionBridge attests external state"
+    },
+    {
+      "name": "FCC extension processes deposit flow",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "FCC extension processes rebalance flow",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "FCC extension processes attestation flow",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "Mock PMW integration works",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "Demo path proven end-to-end",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "Failure-mode tests pass (TEE down, PMW failure, FDC delay)",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "All Foundry tests pass",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "All Go tests pass",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "Contracts deployed on Coston2",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "System contracts accessible on Coston2",
+      "status": "PASS",
+      "detail": "MET"
+    },
+    {
+      "name": "M3 SIGN-OFF",
+      "status": "PASS",
+      "detail": "All criteria met"
+    },
+    {
+      "name": "Demo script v1 exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/demo-script.md"
+    },
+    {
+      "name": "Demo script has thesis section",
+      "status": "PASS",
+      "detail": "Thesis opening"
+    },
+    {
+      "name": "Demo script has deposit section",
+      "status": "PASS",
+      "detail": "Layer 1 deposit"
+    },
+    {
+      "name": "Demo script has confidential position section",
+      "status": "PASS",
+      "detail": "Layer 3 position"
+    },
+    {
+      "name": "Demo script has rebalance section",
+      "status": "PASS",
+      "detail": "Layers 3+4 rebalance"
+    },
+    {
+      "name": "Demo script has solvency section",
+      "status": "PASS",
+      "detail": "Layer 5 solvency"
+    },
+    {
+      "name": "Demo script has close section",
+      "status": "PASS",
+      "detail": "Closing"
+    },
+    {
+      "name": "Demo script has contingency plan",
+      "status": "PASS",
+      "detail": "Fallback plans"
+    },
+    {
+      "name": "Directory exists: contracts/",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/contracts"
+    },
+    {
+      "name": "Directory exists: extension/",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/extension"
+    },
+    {
+      "name": "Directory exists: docs/",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs"
+    },
+    {
+      "name": "Directory exists: scripts/",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/scripts"
+    },
+    {
+      "name": "Directory exists: testdata/",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/testdata"
+    },
+    {
+      "name": "File exists: README.md",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/README.md"
+    },
+    {
+      "name": "File exists: LICENSE",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/LICENSE"
+    },
+    {
+      "name": "File exists: CONTRIBUTING.md",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/CONTRIBUTING.md"
+    },
+    {
+      "name": "File exists: CODE_OF_CONDUCT.md",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/CODE_OF_CONDUCT.md"
+    },
+    {
+      "name": "File exists: docs/architecture.md",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/architecture.md"
+    },
+    {
+      "name": "File exists: docs/deployment.md",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/deployment.md"
+    },
+    {
+      "name": "File exists: docs/security.md",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/security.md"
+    },
+    {
+      "name": "File exists: docs/api.md",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/api.md"
+    },
+    {
+      "name": "File exists: docs/demo-script.md",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/demo-script.md"
+    }
+  ],
+  "acceptance_criteria": {
+    "m3_sign_off": true,
+    "demo_script_v1_drafted": true,
+    "demo_path_proven_end_to_end": true
+  }
+}
