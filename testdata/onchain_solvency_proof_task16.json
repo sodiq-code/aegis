@@ -1,0 +1,15 @@
+{
+  "merkleRoot": "80d4200b6f3a1600000000000000000000000000000000000000000000000000",
+  "surplusBps": 4000,
+  "totalFxrpCollateral": 700000000,
+  "totalLiabilities": 500000000,
+  "collateralRatio": 14000,
+  "timestamp": 1785728999,
+  "votingRound": 1,
+  "attestor": "0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4",
+  "isValid": true,
+  "isSolvent": false,
+  "blockNumber": 33564557,
+  "chainId": 114,
+  "network": "coston2"
+}
