@@ -119,6 +119,12 @@ aegis/
 │       ├── DeployPMWValidator.s.sol
 │       ├── DeployFDCAttestor.s.sol
 │       └── DeployVaultContracts.s.sol
+├── scripts/                    # Python validation & checkpoint scripts
+│   ├── pmw_validate.py          # PMW validation on Coston2
+│   ├── fdc_validate.py          # FDC attestation validation on Coston2
+│   ├── vault_validate.py        # Vault contracts & FAssets integration validation
+│   ├── position_validate.py     # PositionComputer & SolvencyAttestor validation
+│   └── m1_checkpoint.py         # M1 checkpoint — end-to-end walk-through on Coston2
 ├── extension/                   # FCC extension (Go, in TEE)
 │   ├── go.mod
 │   ├── cmd/server/main.go
@@ -147,11 +153,6 @@ aegis/
 ├── examples/
 │   ├── deposit-flow.ts
 │   └── audit-verify.ts
-├── scripts/
-│   ├── pmw_validate.py          # PMW validation on Coston2
-│   ├── fdc_validate.py          # FDC attestation validation on Coston2
-│   ├── vault_validate.py        # Vault contracts & FAssets integration validation
-│   └── position_validate.py     # PositionComputer & SolvencyAttestor validation
 ├── config/                      # Network configs
 │   ├── coston2/
 │   └── proxy/
@@ -159,6 +160,18 @@ aegis/
 │   └── ci.yml
 └── docker-compose.coston2.yaml
 ```
+
+## Deployed Contracts (Coston2)
+
+| Contract | Address |
+|---|---|
+| VerifierRole | `0xB513516d02D88Be754c5204e132DEfbB0F4156e6` |
+| PolicyRegistry | `0xE3FD8668bd865f53c462Abc02Fe6c6c4397E8cf5` |
+| SolvencyRoot | `0xF52C1fd632D853EE46a48a82064D3F5D390f057D` |
+| InstructionSender | `0xB175F16E1cEa66360E354DB4b178C04C69363C06` |
+| VaultCore | `0xcb08Be1CC86D3F94c54c64682372E32f669134bC` |
+
+**M1 Checkpoint:** ✅ PASSED (25/25 checks green) — All vault contracts working end-to-end on Coston2. PMW GO/NO-GO: **GO**.
 
 ## Roadmap
 
