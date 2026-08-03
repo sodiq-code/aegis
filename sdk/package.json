@@ -1,0 +1,32 @@
+{
+  "name": "@aegis/sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Aegis — Verifiable, Confidential, AI-Managed Cross-Chain Treasury on Flare",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "node --experimental-strip-types test/*.ts"
+  },
+  "keywords": [
+    "aegis",
+    "flare",
+    "fassets",
+    "fxrp",
+    "ftso",
+    "fdc",
+    "fcc",
+    "pmw",
+    "treasury",
+    "solvency"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
