@@ -68,6 +68,9 @@ type State struct {
 
         // PMW connection status (Task 14)
         PMWStatus string `json:"pmwStatus,omitempty"`
+
+        // FDC connection status (Task 15)
+        FDCStatus string `json:"fdcStatus,omitempty"`
 }
 
 // --- DO NOT MODIFY below this line. ---
