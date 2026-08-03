@@ -2,56 +2,63 @@
 package types
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
+        "github.com/ethereum/go-ethereum/accounts/abi"
+        "github.com/ethereum/go-ethereum/common"
 )
 
 // SayHelloRequest is the JSON payload sent via the Solidity contract.
 type SayHelloRequest struct {
-	Name string `json:"name"`
+        Name string `json:"name"`
 }
 
 // SayHelloResponse is the JSON payload returned in ActionResult.Data.
 type SayHelloResponse struct {
-	Greeting       string `json:"greeting"`
-	GreetingNumber int    `json:"greetingNumber"`
+        Greeting       string `json:"greeting"`
+        GreetingNumber int    `json:"greetingNumber"`
 }
 
 // SayGoodbyeRequest is the ABI-decoded payload sent via the Solidity contract.
 type SayGoodbyeRequest struct {
-	Name   string `json:"name"`
-	Reason string `json:"reason"`
+        Name   string `json:"name"`
+        Reason string `json:"reason"`
 }
 
 // SayGoodbyeResponse is the JSON payload returned in ActionResult.Data.
 type SayGoodbyeResponse struct {
-	Farewell       string `json:"farewell"`
-	FarewellNumber int    `json:"farewellNumber"`
+        Farewell       string `json:"farewell"`
+        FarewellNumber int    `json:"farewellNumber"`
 }
 
 // SayGoodbyeMessageArg describes the ABI layout of SayGoodbyeMessage from the Solidity contract.
 var SayGoodbyeMessageArg abi.Argument
 
 func init() {
-	tupleTy, _ := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
-		{Name: "name", Type: "string"},
-		{Name: "reason", Type: "string"},
-	})
-	SayGoodbyeMessageArg = abi.Argument{Type: tupleTy}
+        tupleTy, _ := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
+                {Name: "name", Type: "string"},
+                {Name: "reason", Type: "string"},
+        })
+        SayGoodbyeMessageArg = abi.Argument{Type: tupleTy}
 }
 
 // State holds the extension's observable state, returned by GET /state.
 type State struct {
-	GreetingCount int    `json:"greetingCount"`
-	LastGreeting  string `json:"lastGreeting"`
-	FarewellCount int    `json:"farewellCount"`
-	LastFarewell  string `json:"lastFarewell"`
+        GreetingCount int    `json:"greetingCount"`
+        LastGreeting  string `json:"lastGreeting"`
+        FarewellCount int    `json:"farewellCount"`
+        LastFarewell  string `json:"lastFarewell"`
+
+        // Aegis-specific state
+        PositionCount       int    `json:"positionCount"`
+        ActivePositionCount int    `json:"activePositionCount"`
+        TotalFxrpDeposited  uint64 `json:"totalFxrpDeposited"`
+        MerkleRoot          string `json:"merkleRoot"`
+        SolvencyStatus      string `json:"solvencyStatus"`
 }
 
 // --- DO NOT MODIFY below this line. ---
 
 // StateResponse is the envelope returned by GET /state.
 type StateResponse struct {
-	StateVersion common.Hash `json:"stateVersion"`
-	State        State       `json:"state"`
+        StateVersion common.Hash `json:"stateVersion"`
+        State        State       `json:"state"`
 }

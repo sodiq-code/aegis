@@ -123,10 +123,10 @@ aegis/
 │   ├── go.mod
 │   ├── cmd/server/main.go
 │   ├── internal/
-│   │   ├── position/            # PositionComputer
+│   │   ├── position/            # PositionComputer (Layer 3 core)
+│   │   ├── attestation/         # SolvencyAttestor (Layer 3+5)
 │   │   ├── risk/                # RiskAgent (XGBoost)
 │   │   ├── policy/              # Policy Engine
-│   │   ├── attestation/         # SolvencyAttestor
 │   │   ├── attester/            # FDC Attestor (Layer 5)
 │   │   └── executor/            # ActionExecutor (PMW)
 │   ├── Dockerfile
@@ -150,7 +150,8 @@ aegis/
 ├── scripts/
 │   ├── pmw_validate.py          # PMW validation on Coston2
 │   ├── fdc_validate.py          # FDC attestation validation on Coston2
-│   └── vault_validate.py        # Vault contracts & FAssets integration validation
+│   ├── vault_validate.py        # Vault contracts & FAssets integration validation
+│   └── position_validate.py     # PositionComputer & SolvencyAttestor validation
 ├── config/                      # Network configs
 │   ├── coston2/
 │   └── proxy/
