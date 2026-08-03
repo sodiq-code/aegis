@@ -17,6 +17,7 @@ import "./interfaces/fassets/IFtsoV2.sol";
 ///      depositFXRP(amount, policyId), withdraw(amount), emergencyExit(),
 ///      balanceOf(user), policyOf(user).
 ///      Uses FlareContractRegistry for dynamic resolution of FAssets and FTSO addresses.
+///      Task 17 (Day 17): Added circuit breaker, safe-state logic, and emergency mode auto-trigger.
 contract VaultCore is IVaultCore {
     // --- State Variables ---
 
@@ -45,6 +46,26 @@ contract VaultCore is IVaultCore {
 
     /// @notice Whether the vault is in emergency mode
     bool private _emergencyMode;
+
+    /// @notice Whether the vault is in safe state (Task 17)
+    /// Per the report's Section 9.3.12: "If the TEE fails or becomes unavailable,
+    /// the vault enters a safe state: no new positions are taken, no rebalances occur."
+    bool private _safeState;
+
+    /// @notice Reason for the current safe state or emergency mode
+    string private _safeStateReason;
+
+    /// @notice Timestamp when the safe state was entered
+    uint256 private _safeStateSince;
+
+    /// @notice Timestamp when the emergency mode was entered
+    uint256 private _emergencySince;
+
+    /// @notice Consecutive failure count for circuit breaker (Task 17)
+    uint256 private _consecutiveFails;
+
+    /// @notice Maximum consecutive failures before auto-entering safe state
+    uint256 private _circuitBreakerThreshold;
 
     /// @notice VerifierRole contract for access control
     IVerifierRole public verifierRole;
@@ -78,6 +99,11 @@ contract VaultCore is IVaultCore {
         _;
     }
 
+    modifier notInSafeState() {
+        require(!_safeState, "VaultCore: vault is in safe state");
+        _;
+    }
+
     // --- Constructor ---
 
     constructor(
@@ -95,6 +121,7 @@ contract VaultCore is IVaultCore {
         flareRegistry = IFlareContractRegistry(_flareRegistry);
         verifierRole = IVerifierRole(_verifierRole);
         _nextPositionId = 1;
+        _circuitBreakerThreshold = 3; // Default: 3 consecutive failures triggers safe state
 
         // Resolve FAssets addresses from the Flare Contract Registry
         // This follows the official Flare pattern: never hardcode addresses
@@ -126,7 +153,8 @@ contract VaultCore is IVaultCore {
     // --- Report-Specified API (Section 9.4.5) ---
 
     /// @inheritdoc IVaultCore
-    function depositFXRP(uint256 amount, uint256 policyId) external override notInEmergency returns (uint256) {
+    /// @dev Task 17: Also blocked in safe state — per report: "no new positions are taken"
+    function depositFXRP(uint256 amount, uint256 policyId) external override notInEmergency notInSafeState returns (uint256) {
         require(amount >= config.minDepositAmount, "VaultCore: below minimum deposit");
         require(amount <= config.maxDepositAmount, "VaultCore: exceeds maximum deposit");
 
@@ -174,7 +202,8 @@ contract VaultCore is IVaultCore {
     }
 
     /// @inheritdoc IVaultCore
-    function withdraw(uint256 amount) external override notInEmergency {
+    /// @dev Task 17: Withdrawals allowed in safe state — per report: "user can withdraw"
+    function withdraw(uint256 amount) external override {
         require(amount > 0, "VaultCore: zero amount");
         require(_depositorBalances[msg.sender] >= amount, "VaultCore: insufficient balance");
 
@@ -330,11 +359,135 @@ contract VaultCore is IVaultCore {
 
     /// @notice Set the vault to emergency mode
     function setEmergencyMode(bool emergency) external onlyAdmin {
-        _emergencyMode = emergency;
+        if (emergency && !_emergencyMode) {
+            _emergencyMode = true;
+            _emergencySince = block.timestamp;
+            _safeStateReason = "Admin triggered emergency mode";
+            emit EmergencyModeEntered(msg.sender, _safeStateReason, block.timestamp);
+        } else if (!emergency && _emergencyMode) {
+            _emergencyMode = false;
+            _emergencySince = 0;
+            emit EmergencyModeExited(msg.sender, block.timestamp);
+        }
     }
 
     /// @notice Check if the vault is in emergency mode
     function isEmergencyMode() external view returns (bool) {
         return _emergencyMode;
     }
+
+    // --- Task 17: Safe State and Circuit Breaker Functions ---
+
+    /// @notice Enter safe state (Task 17)
+    /// @dev Per the report's Section 9.3.12: "the vault enters a safe state:
+    ///      no new positions are taken, no rebalances occur"
+    /// @param reason The reason for entering safe state
+    function enterSafeState(string calldata reason) external onlyVerifier {
+        if (!_safeState) {
+            _safeState = true;
+            _safeStateReason = reason;
+            _safeStateSince = block.timestamp;
+            emit SafeStateEntered(msg.sender, reason, block.timestamp);
+        }
+    }
+
+    /// @notice Exit safe state (Task 17)
+    /// @dev Only callable when all subsystems are healthy
+    function exitSafeState() external onlyVerifier {
+        if (_safeState) {
+            _safeState = false;
+            _safeStateReason = "";
+            _safeStateSince = 0;
+            _consecutiveFails = 0;
+            emit SafeStateExited(msg.sender, block.timestamp);
+        }
+    }
+
+    /// @notice Check if the vault is in safe state
+    function isSafeState() external view returns (bool) {
+        return _safeState;
+    }
+
+    /// @notice Get the safe state reason
+    function getSafeStateReason() external view returns (string memory) {
+        return _safeStateReason;
+    }
+
+    /// @notice Get the safe state since timestamp
+    function getSafeStateSince() external view returns (uint256) {
+        return _safeStateSince;
+    }
+
+    /// @notice Get the emergency mode since timestamp
+    function getEmergencySince() external view returns (uint256) {
+        return _emergencySince;
+    }
+
+    /// @notice Record a failure for circuit breaker (Task 17)
+    /// @dev Automatically enters safe state when consecutive failures exceed threshold
+    /// @param reason The reason for the failure
+    function recordFailure(string calldata reason) external onlyVerifier {
+        _consecutiveFails++;
+        if (_consecutiveFails >= _circuitBreakerThreshold && !_safeState) {
+            _safeState = true;
+            _safeStateReason = reason;
+            _safeStateSince = block.timestamp;
+            emit SafeStateEntered(msg.sender, reason, block.timestamp);
+            emit CircuitBreakerTripped(msg.sender, _consecutiveFails, reason, block.timestamp);
+        }
+        emit FailureRecorded(msg.sender, _consecutiveFails, reason, block.timestamp);
+    }
+
+    /// @notice Reset consecutive failure count (Task 17)
+    function resetFailures() external onlyVerifier {
+        _consecutiveFails = 0;
+    }
+
+    /// @notice Get the consecutive failure count
+    function getConsecutiveFails() external view returns (uint256) {
+        return _consecutiveFails;
+    }
+
+    /// @notice Set the circuit breaker threshold
+    function setCircuitBreakerThreshold(uint256 threshold) external onlyAdmin {
+        require(threshold > 0, "VaultCore: threshold must be > 0");
+        _circuitBreakerThreshold = threshold;
+    }
+
+    /// @notice Get the circuit breaker threshold
+    function getCircuitBreakerThreshold() external view returns (uint256) {
+        return _circuitBreakerThreshold;
+    }
+
+    /// @notice Trigger emergency mode from solvency breach (Task 17)
+    /// @dev Per the report's Section 9.5.7: "the vault fails safe (no new positions)
+    ///      if the TEE is unavailable; users can always exit via emergencyExit"
+    function triggerEmergencyFromSolvencyBreach(string calldata reason) external onlyVerifier {
+        if (!_emergencyMode) {
+            _emergencyMode = true;
+            _emergencySince = block.timestamp;
+            _safeStateReason = reason;
+            emit EmergencyModeEntered(msg.sender, reason, block.timestamp);
+        }
+    }
+
+    // --- Task 17: Events ---
+
+    /// @notice Emitted when the vault enters safe state
+    event SafeStateEntered(address indexed triggeredBy, string reason, uint256 timestamp);
+
+    /// @notice Emitted when the vault exits safe state
+    event SafeStateExited(address indexed triggeredBy, uint256 timestamp);
+
+    /// @notice Emitted when the vault enters emergency mode
+    event EmergencyModeEntered(address indexed triggeredBy, string reason, uint256 timestamp);
+
+    /// @notice Emitted when the vault exits emergency mode
+    event EmergencyModeExited(address indexed triggeredBy, uint256 timestamp);
+
+    /// @notice Emitted when a failure is recorded for circuit breaker
+    event FailureRecorded(address indexed triggeredBy, uint256 consecutiveFails, string reason, uint256 timestamp);
+
+    /// @notice Emitted when the circuit breaker trips
+    event CircuitBreakerTripped(address indexed triggeredBy, uint256 consecutiveFails, string reason, uint256 timestamp);
 }

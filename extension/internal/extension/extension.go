@@ -17,6 +17,7 @@ import (
         "extension-scaffold/internal/policy"
         "extension-scaffold/internal/position"
         "extension-scaffold/internal/risk"
+        "extension-scaffold/internal/safestate"
         "extension-scaffold/pkg/types"
 
         "github.com/flare-foundation/go-flare-common/pkg/tee/instruction"
@@ -46,6 +47,9 @@ type Extension struct {
         // Task 15: FDC client for external state attestation
         FDCClient        *fdc.FDCClient
         FDCPositionBridge *fdc.FDCPositionBridge
+
+        // Task 17: Safe-state manager for error handling
+        SafeStateManager *safestate.SafeStateManager
 }
 
 // ─── PolicyEngineAdapter ────────────────────────────────────────────────────
@@ -309,6 +313,54 @@ func New(extensionPort, signPort int) *Extension {
                 e.RiskAgent.SetAttestationPublisher(attestPublisher)
         }
 
+        // Task 17: Initialize the SafeStateManager for error handling, safe-state logic, and emergency exit
+        // Per the report's Section 9.3.12: "If the TEE fails or becomes unavailable, the vault enters
+        // a safe state: no new positions are taken, no rebalances occur, and the user can withdraw
+        // their deposited assets via an emergency exit path that does not depend on the TEE."
+        safeStateConfig := safestate.DefaultSafeStateConfig()
+        e.SafeStateManager = safestate.NewSafeStateManager(safeStateConfig)
+
+        // Register SafeStateManager callbacks
+        e.SafeStateManager.OnEnterSafeState(func(reason string) {
+                fmt.Printf("⚠️  VAULT ENTERED SAFE STATE: %s\n", reason)
+                fmt.Printf("   No new deposits or rebalances; withdrawals and emergency exits still allowed\n")
+        })
+        e.SafeStateManager.OnExitSafeState(func() {
+                fmt.Printf("✅ VAULT EXITED SAFE STATE — normal operations resumed\n")
+        })
+        e.SafeStateManager.OnEnterEmergency(func(reason string) {
+                fmt.Printf("🚨 VAULT ENTERED EMERGENCY MODE: %s\n", reason)
+                fmt.Printf("   Only emergency exits allowed; no deposits, withdrawals, or rebalances\n")
+        })
+        e.SafeStateManager.OnExitEmergency(func() {
+                fmt.Printf("✅ VAULT EXITED EMERGENCY MODE\n")
+        })
+
+        // Report initial subsystem health based on connection status
+        e.SafeStateManager.ReportHealth(safestate.SystemTEE, safestate.HealthHealthy)
+        e.SafeStateManager.ReportHealth(safestate.SystemPosition, safestate.HealthHealthy)
+        e.SafeStateManager.ReportHealth(safestate.SystemPolicy, safestate.HealthHealthy)
+
+        if e.FDCClient != nil && e.FDCClient.IsConnected() {
+                e.SafeStateManager.ReportHealth(safestate.SystemFDC, safestate.HealthHealthy)
+        } else {
+                e.SafeStateManager.ReportHealth(safestate.SystemFDC, safestate.HealthDegraded)
+                e.SafeStateManager.ReportError(safestate.SystemFDC, fmt.Errorf("FDC client not connected"), safestate.ErrorClassTransient)
+        }
+
+        if e.ActionExecutor != nil && e.ActionExecutor.IsPMWConnected() {
+                e.SafeStateManager.ReportHealth(safestate.SystemPMW, safestate.HealthHealthy)
+        } else {
+                e.SafeStateManager.ReportHealth(safestate.SystemPMW, safestate.HealthDegraded)
+                e.SafeStateManager.ReportError(safestate.SystemPMW, fmt.Errorf("PMW client not connected (mock mode)"), safestate.ErrorClassTransient)
+        }
+
+        if e.RiskAgent != nil {
+                e.SafeStateManager.ReportHealth(safestate.SystemRiskAgent, safestate.HealthHealthy)
+        }
+
+        fmt.Printf("SafeStateManager initialized — vault mode: %s\n", e.SafeStateManager.GetMode())
+
         mux := http.NewServeMux()
         mux.HandleFunc("GET /state", e.stateHandler)
         mux.HandleFunc("POST /action", e.actionHandler)
@@ -349,6 +401,17 @@ func (e *Extension) stateHandler(w http.ResponseWriter, r *http.Request) {
                 fdcStatus = "connected"
         }
 
+        // Task 17: Safe-state manager status
+        vaultMode := "NORMAL"
+        safeStateReason := ""
+        if e.SafeStateManager != nil {
+                vaultMode = string(e.SafeStateManager.GetMode())
+                summary := e.SafeStateManager.GetSafeStateSummary()
+                if summary.LastTransition != nil {
+                        safeStateReason = summary.LastTransition.Reason
+                }
+        }
+
         stateResponse := types.StateResponse{
                 StateVersion: teeutils.ToHash(config.Version),
                 State: types.State{
@@ -381,6 +444,10 @@ func (e *Extension) stateHandler(w http.ResponseWriter, r *http.Request) {
 
                         // FDC connection status (Task 15)
                         FDCStatus: fdcStatus,
+
+                        // Safe-state manager status (Task 17)
+                        VaultMode:      vaultMode,
+                        SafeStateReason: safeStateReason,
                 },
         }
         e.mu.RUnlock()

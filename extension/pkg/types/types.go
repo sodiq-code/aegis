@@ -71,6 +71,10 @@ type State struct {
 
         // FDC connection status (Task 15)
         FDCStatus string `json:"fdcStatus,omitempty"`
+
+        // Safe-state manager status (Task 17)
+        VaultMode       string `json:"vaultMode,omitempty"`
+        SafeStateReason string `json:"safeStateReason,omitempty"`
 }
 
 // --- DO NOT MODIFY below this line. ---
