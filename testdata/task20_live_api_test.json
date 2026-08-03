@@ -1,0 +1,27 @@
+{
+  "total": 4,
+  "passed": 1,
+  "failed": 3,
+  "checks": [
+    {
+      "name": "API responds successfully",
+      "pass": false,
+      "detail": "<urlopen error [Errno 111] Connection refused>"
+    },
+    {
+      "name": "API responds successfully",
+      "pass": false,
+      "detail": "<urlopen error [Errno 111] Connection refused>"
+    },
+    {
+      "name": "Solvency API responds",
+      "pass": false,
+      "detail": "<urlopen error [Errno 111] Connection refused>"
+    },
+    {
+      "name": "Flare RPC proxy available",
+      "pass": true,
+      "detail": "Expected format: name 'method' is not defined"
+    }
+  ]
+}
