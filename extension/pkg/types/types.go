@@ -65,6 +65,9 @@ type State struct {
         // Policy enforcement stats (Task 12)
         PolicyEnforcementStats string `json:"policyEnforcementStats,omitempty"`
         ExecutorStats          string `json:"executorStats,omitempty"`
+
+        // PMW connection status (Task 14)
+        PMWStatus string `json:"pmwStatus,omitempty"`
 }
 
 // --- DO NOT MODIFY below this line. ---
