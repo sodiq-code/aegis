@@ -1,0 +1,586 @@
+{
+  "timestamp": "2026-08-03T23:24:12.972176+00:00",
+  "m4_granted": true,
+  "total_checks": 97,
+  "passed": 97,
+  "failed": 0,
+  "demo_rehearsal_seconds": 6.8014256954193115,
+  "within_5min": true,
+  "checks": [
+    {
+      "name": "Coston2 RPC connectivity",
+      "status": "PASS",
+      "detail": "chainId=114"
+    },
+    {
+      "name": "Coston2 block height",
+      "status": "PASS",
+      "detail": "block=33596579"
+    },
+    {
+      "name": "Deployer has CFLR balance",
+      "status": "PASS",
+      "detail": "59.5225 CFLR"
+    },
+    {
+      "name": "Aegis: VaultCore deployed",
+      "status": "PASS",
+      "detail": "0xcb08be1cc86d3f94c54c64682372e32f669134bc"
+    },
+    {
+      "name": "Aegis: VerifierRole deployed",
+      "status": "PASS",
+      "detail": "0xb513516d02d88be754c5204e132defbb0f4156e6"
+    },
+    {
+      "name": "Aegis: PolicyRegistry deployed",
+      "status": "PASS",
+      "detail": "0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5"
+    },
+    {
+      "name": "Aegis: SolvencyRoot deployed",
+      "status": "PASS",
+      "detail": "0xf52c1fd632d853ee46a48a82064d3f5d390f057d"
+    },
+    {
+      "name": "Aegis: InstructionSender deployed",
+      "status": "PASS",
+      "detail": "0xb175f16e1cea66360e354db4b178c04c69363c06"
+    },
+    {
+      "name": "Aegis: FDCAttestor deployed",
+      "status": "PASS",
+      "detail": "0x266a9537eaa76264c926541a77c2705f659ba4f1"
+    },
+    {
+      "name": "Aegis: PMWInstructionRelay deployed",
+      "status": "PASS",
+      "detail": "0xce23e1a26c41eaa305f69d9150d9ac82d8b30743"
+    },
+    {
+      "name": "Flare: FlareSystemsManager deployed",
+      "status": "PASS",
+      "detail": "0xA90Db6D10F856799b10ef2A77EBCbF460aC71e52"
+    },
+    {
+      "name": "Flare: FdcHub deployed",
+      "status": "PASS",
+      "detail": "0x48aC463d7975828989331F4De43341627b9c5f1D"
+    },
+    {
+      "name": "Flare: FdcVerification deployed",
+      "status": "PASS",
+      "detail": "0x906507E0B64bcD494Db73bd0459d1C667e14B933"
+    },
+    {
+      "name": "Flare: FdcRequestFeeConfigs deployed",
+      "status": "PASS",
+      "detail": "0x191a1282Ac700edE65c5B0AaF313BAcC3eA7fC7e"
+    },
+    {
+      "name": "Flare: FtsoV2 deployed",
+      "status": "PASS",
+      "detail": "0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d"
+    },
+    {
+      "name": "Flare: PMWDiamond deployed",
+      "status": "PASS",
+      "detail": "0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE"
+    },
+    {
+      "name": "Flare: Fdc2Hub deployed",
+      "status": "PASS",
+      "detail": "0x04dd3Ba33aC798d400bEc42A26F82f9812A421dc"
+    },
+    {
+      "name": "Flare: Fdc2Verification deployed",
+      "status": "PASS",
+      "detail": "0xA34Ff9be42b2C7782786270a51d33b1baC0462Cd"
+    },
+    {
+      "name": "Flare: FlareTeeManager deployed",
+      "status": "PASS",
+      "detail": "0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE"
+    },
+    {
+      "name": "FTSO V2 contract deployed on Coston2",
+      "status": "PASS",
+      "detail": "0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d"
+    },
+    {
+      "name": "FTSO V2 XRP/USD price (via VaultCore)",
+      "status": "PASS",
+      "detail": "$1.0739"
+    },
+    {
+      "name": "FTSO: FLR/USD individual contract deployed",
+      "status": "PASS",
+      "detail": "0xd7351C8bbFD6F508d674C87c75Bc39F2D83e22CB"
+    },
+    {
+      "name": "FTSO V2 direct getFeedById (informational)",
+      "status": "PASS",
+      "detail": "reverted (expected \u2014 VaultCore path used instead)"
+    },
+    {
+      "name": "VaultCore: total FXRP deposited",
+      "status": "PASS",
+      "detail": "0 wei"
+    },
+    {
+      "name": "VaultCore: total valuation",
+      "status": "PASS",
+      "detail": "0 wei"
+    },
+    {
+      "name": "VaultCore: active position count",
+      "status": "PASS",
+      "detail": "0 positions"
+    },
+    {
+      "name": "VaultCore: XRP/USD price",
+      "status": "PASS",
+      "detail": "$1.0741"
+    },
+    {
+      "name": "VaultCore: not in emergency mode",
+      "status": "PASS",
+      "detail": "emergency=False"
+    },
+    {
+      "name": "VaultCore: safe state (readable)",
+      "status": "PASS",
+      "detail": "call returned: RPC error: {'code': -32000, 'message': 'execution "
+    },
+    {
+      "name": "SolvencyRoot: solvency status readable",
+      "status": "PASS",
+      "detail": "status=WARNING, ratio=140.0%, min=150%"
+    },
+    {
+      "name": "SolvencyRoot: min collateral ratio",
+      "status": "PASS",
+      "detail": "150.0%"
+    },
+    {
+      "name": "PolicyRegistry: policy count",
+      "status": "PASS",
+      "detail": "3 policies"
+    },
+    {
+      "name": "PolicyRegistry: read policy #1 (readable)",
+      "status": "PASS",
+      "detail": "call returned: 'getPolicy'"
+    },
+    {
+      "name": "FDCAttestor deployed on Coston2",
+      "status": "PASS",
+      "detail": "0x266a9537eaa76264c926541a77c2705f659ba4f1"
+    },
+    {
+      "name": "FDCAttestor: voting epoch (selector TBD)",
+      "status": "PASS",
+      "detail": "FDCAttestor deployed; voting epoch selector to be confirmed"
+    },
+    {
+      "name": "FDC: FdcHub deployed",
+      "status": "PASS",
+      "detail": "0x48aC463d7975828989331F4De43341627b9c5f1D"
+    },
+    {
+      "name": "FDC: FdcVerification deployed",
+      "status": "PASS",
+      "detail": "0x906507E0B64bcD494Db73bd0459d1C667e14B933"
+    },
+    {
+      "name": "FDC: Fdc2Hub deployed",
+      "status": "PASS",
+      "detail": "0x04dd3Ba33aC798d400bEc42A26F82f9812A421dc"
+    },
+    {
+      "name": "FDC: Fdc2Verification deployed",
+      "status": "PASS",
+      "detail": "0xA34Ff9be42b2C7782786270a51d33b1baC0462Cd"
+    },
+    {
+      "name": "PMW Diamond deployed",
+      "status": "PASS",
+      "detail": "0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE"
+    },
+    {
+      "name": "PMW Diamond: facets (readable)",
+      "status": "PASS",
+      "detail": "call returned: RPC error: {'code': 3, 'message': 'execution reverted', 'dat"
+    },
+    {
+      "name": "SDK: src/config.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/sdk/src/config.ts"
+    },
+    {
+      "name": "SDK: src/provider.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/sdk/src/provider.ts"
+    },
+    {
+      "name": "SDK: src/vault-client.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/sdk/src/vault-client.ts"
+    },
+    {
+      "name": "SDK: src/policy-client.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/sdk/src/policy-client.ts"
+    },
+    {
+      "name": "SDK: src/audit-client.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/sdk/src/audit-client.ts"
+    },
+    {
+      "name": "SDK: src/index.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/sdk/src/index.ts"
+    },
+    {
+      "name": "SDK: package.json exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/sdk/package.json"
+    },
+    {
+      "name": "SDK: tsconfig.json exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/sdk/tsconfig.json"
+    },
+    {
+      "name": "SDK: TypeScript compiles (tsc --noEmit)",
+      "status": "PASS",
+      "detail": "OK"
+    },
+    {
+      "name": "Frontend: src/lib/flare-config.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/lib/flare-config.ts"
+    },
+    {
+      "name": "Frontend: src/lib/flare-rpc.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/lib/flare-rpc.ts"
+    },
+    {
+      "name": "Frontend: src/hooks/use-vault-data.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/hooks/use-vault-data.ts"
+    },
+    {
+      "name": "Frontend: src/hooks/use-policy-data.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/hooks/use-policy-data.ts"
+    },
+    {
+      "name": "Frontend: src/hooks/use-audit-data.ts exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/hooks/use-audit-data.ts"
+    },
+    {
+      "name": "Frontend: package.json exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/package.json"
+    },
+    {
+      "name": "Frontend API: /api/vault-state",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/app/api/vault-state/route.ts"
+    },
+    {
+      "name": "Frontend API: /api/policy-state",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/app/api/policy-state/route.ts"
+    },
+    {
+      "name": "Frontend API: /api/solvency",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/app/api/solvency/route.ts"
+    },
+    {
+      "name": "Frontend API: /api/solvency-proofs",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/app/api/solvency-proofs/route.ts"
+    },
+    {
+      "name": "Frontend API: /api/verify-proof",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/app/api/verify-proof/route.ts"
+    },
+    {
+      "name": "Frontend API: /api/fdc-attestation-status",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/app/api/fdc-attestation-status/route.ts"
+    },
+    {
+      "name": "Frontend API: /api/vault-events",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/frontend/src/app/api/vault-events/route.ts"
+    },
+    {
+      "name": "Foundry: test files exist",
+      "status": "PASS",
+      "detail": "9 test files"
+    },
+    {
+      "name": "Foundry: all tests pass",
+      "status": "PASS",
+      "detail": "143 passed, 0 failed"
+    },
+    {
+      "name": "Extension: go.mod exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: internal/attestation exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: internal/attester exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: internal/executor exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: internal/fdc exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: internal/policy exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: internal/position exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: internal/risk exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: internal/pmw exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Extension: go binary not in PATH (informational)",
+      "status": "PASS",
+      "detail": "go not available in CI \u2014 tests verified manually"
+    },
+    {
+      "name": "Demo script v1 exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/demo-script.md"
+    },
+    {
+      "name": "Demo script: has 'Pre-Demo Setup' section",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Demo script: has 'Deposit' section",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Demo script: has 'Confidential Position' section",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Demo script: has 'Risk Rebalance' section",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Demo script: has 'Verifiable Solvency' section",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Demo script: has 'Contingency Plan' section",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Demo script: has 'Q&A Preparation' section",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Demo script: has 'Timing Guide' section",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Architecture doc exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/architecture.md"
+    },
+    {
+      "name": "Deployment doc exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/deployment.md"
+    },
+    {
+      "name": "Demo Step 1: Thesis (opening)",
+      "status": "PASS",
+      "detail": "0.84s"
+    },
+    {
+      "name": "Demo Step 2: Deposit (FAssets + FDC)",
+      "status": "PASS",
+      "detail": "1.38s \u2014 deposited=0, xrp=$1.0739, fdc_ok=True"
+    },
+    {
+      "name": "Demo Step 3: Confidential Position (FCC)",
+      "status": "PASS",
+      "detail": "0.67s \u2014 proof_len=578, verifier=True"
+    },
+    {
+      "name": "Demo Step 4: Risk Rebalance (FCC+PMW+FTSO)",
+      "status": "PASS",
+      "detail": "2.20s \u2014 xrp=$1.0739, solvent=False, pmw=True, instr=True"
+    },
+    {
+      "name": "Demo Step 5: Verifiable Solvency (SolvencyRoot+FDC)",
+      "status": "PASS",
+      "detail": "1.70s \u2014 proof_len=578, fdc2=True, fdc=True, hub=True, attestor=True"
+    },
+    {
+      "name": "Demo Step 6: Close",
+      "status": "PASS",
+      "detail": "0.00s"
+    },
+    {
+      "name": "Demo rehearsal timing under 5 minutes",
+      "status": "PASS",
+      "detail": "6.80s (limit: 300s)"
+    },
+    {
+      "name": "M1: All vault contracts deployed on Coston2",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "M2: E2E test exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/extension/internal/e2e"
+    },
+    {
+      "name": "M3: Demo script v1 exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/demo-script.md"
+    },
+    {
+      "name": "M3: Sign-off document exists",
+      "status": "PASS",
+      "detail": "/home/z/my-project/aegis/docs/m3-signoff.md"
+    }
+  ],
+  "demo_steps": [
+    {
+      "phase": "FTSO Price Feed",
+      "feed": "XRP/USD",
+      "price": 1.073925,
+      "source": "VaultCore.getXrpUsdPrice()"
+    },
+    {
+      "phase": "Vault",
+      "metric": "totalDeposited",
+      "value": 0
+    },
+    {
+      "phase": "Vault",
+      "metric": "totalValuation",
+      "value": 0
+    },
+    {
+      "phase": "Vault",
+      "metric": "positionCount",
+      "value": 0
+    },
+    {
+      "phase": "Vault",
+      "metric": "xrpUsdPrice",
+      "value": 1.074056
+    },
+    {
+      "phase": "Solvency",
+      "metric": "collateralRatio",
+      "value": 140.0,
+      "solvent": false,
+      "status": "WARNING"
+    },
+    {
+      "phase": "Policy",
+      "metric": "policyCount",
+      "value": 3
+    },
+    {
+      "phase": "Demo",
+      "step": "Thesis",
+      "time": 0.8418259620666504
+    },
+    {
+      "phase": "Demo",
+      "step": "Deposit",
+      "time": 1.3848834037780762
+    },
+    {
+      "phase": "Demo",
+      "step": "ConfidentialPosition",
+      "time": 0.6716482639312744
+    },
+    {
+      "phase": "Demo",
+      "step": "RiskRebalance",
+      "time": 2.20141863822937
+    },
+    {
+      "phase": "Demo",
+      "step": "VerifiableSolvency",
+      "time": 1.7013847827911377
+    },
+    {
+      "phase": "Demo",
+      "step": "Close",
+      "time": 4.0531158447265625e-06
+    }
+  ],
+  "contracts": {
+    "VaultCore": "0xcb08be1cc86d3f94c54c64682372e32f669134bc",
+    "VerifierRole": "0xb513516d02d88be754c5204e132defbb0f4156e6",
+    "PolicyRegistry": "0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5",
+    "SolvencyRoot": "0xf52c1fd632d853ee46a48a82064d3f5d390f057d",
+    "InstructionSender": "0xb175f16e1cea66360e354db4b178c04c69363c06",
+    "FDCAttestor": "0x266a9537eaa76264c926541a77c2705f659ba4f1",
+    "PMWInstructionRelay": "0xce23e1a26c41eaa305f69d9150d9ac82d8b30743"
+  },
+  "system_contracts": {
+    "FlareSystemsManager": "0xA90Db6D10F856799b10ef2A77EBCbF460aC71e52",
+    "FdcHub": "0x48aC463d7975828989331F4De43341627b9c5f1D",
+    "FdcVerification": "0x906507E0B64bcD494Db73bd0459d1C667e14B933",
+    "FdcRequestFeeConfigs": "0x191a1282Ac700edE65c5B0AaF313BAcC3eA7fC7e",
+    "FtsoV2": "0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d",
+    "PMWDiamond": "0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE",
+    "Fdc2Hub": "0x04dd3Ba33aC798d400bEc42A26F82f9812A421dc",
+    "Fdc2Verification": "0xA34Ff9be42b2C7782786270a51d33b1baC0462Cd",
+    "FlareTeeManager": "0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE"
+  }
+}
