@@ -61,6 +61,10 @@ type State struct {
         AgentLastAction       string  `json:"agentLastAction"`
         AgentTotalActions     uint64  `json:"agentTotalActions"`
         AgentTotalAttestations uint64 `json:"agentTotalAttestations"`
+
+        // Policy enforcement stats (Task 12)
+        PolicyEnforcementStats string `json:"policyEnforcementStats,omitempty"`
+        ExecutorStats          string `json:"executorStats,omitempty"`
 }
 
 // --- DO NOT MODIFY below this line. ---
