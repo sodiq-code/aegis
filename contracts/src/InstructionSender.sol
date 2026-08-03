@@ -6,6 +6,8 @@ import "./interfaces/vault/IVerifierRole.sol";
 
 /// @title InstructionSender
 /// @notice Sends cross-chain instructions to the XRPL via Flare PMW.
+///         Implements the report-specified API (Section 9.4.5):
+///         sendInstruction(payload), getResponse(instructionId).
 contract InstructionSender is IInstructionSender {
     // --- State Variables ---
 
@@ -23,6 +25,9 @@ contract InstructionSender is IInstructionSender {
 
     /// @notice Mapping from status => instruction IDs
     mapping(InstructionStatus => uint256[]) private _instructionsByStatus;
+
+    /// @notice Mapping from instructionId (bytes32) => response data
+    mapping(bytes32 => bytes) private _responses;
 
     // --- Modifiers ---
 
@@ -51,7 +56,47 @@ contract InstructionSender is IInstructionSender {
         _nextInstructionId = 1;
     }
 
-    // --- View Functions ---
+    // --- Report-Specified API (Section 9.4.5) ---
+
+    /// @inheritdoc IInstructionSender
+    function sendInstruction(bytes calldata payload) external override onlyVerifier {
+        // Decode the payload to create an instruction
+        // Payload format: ABI-encoded (InstructionType, positionId, amount, destination)
+        (
+            InstructionType instrType,
+            uint256 positionId,
+            uint256 amount,
+            address destination
+        ) = abi.decode(payload, (InstructionType, uint256, uint256, address));
+
+        require(amount > 0, "InstructionSender: zero amount");
+        require(destination != address(0), "InstructionSender: zero destination");
+
+        uint256 instructionId = _nextInstructionId++;
+
+        Instruction storage instr = _instructions[instructionId];
+        instr.instructionId = instructionId;
+        instr.instrType = instrType;
+        instr.initiator = msg.sender;
+        instr.positionId = positionId;
+        instr.amount = amount;
+        instr.destination = destination;
+        instr.createdAt = block.timestamp;
+        instr.status = InstructionStatus.SUBMITTED;
+        instr.pmwInstruction = payload;
+
+        _instructionsByStatus[InstructionStatus.SUBMITTED].push(instructionId);
+
+        emit InstructionCreated(instructionId, instrType, msg.sender, amount);
+        emit InstructionSubmitted(instructionId, bytes32(0));
+    }
+
+    /// @inheritdoc IInstructionSender
+    function getResponse(bytes32 instructionId) external view override returns (bytes memory) {
+        return _responses[instructionId];
+    }
+
+    // --- Extended API ---
 
     /// @inheritdoc IInstructionSender
     function getInstruction(uint256 instructionId) external view override returns (Instruction memory) {
@@ -78,13 +123,6 @@ contract InstructionSender is IInstructionSender {
     function getInstructionCount() external view override returns (uint256) {
         return _nextInstructionId - 1;
     }
-
-    /// @inheritdoc IInstructionSender
-    function getPMWProjectId() external view override returns (uint256) {
-        return _pmwProjectId;
-    }
-
-    // --- State-Changing Functions ---
 
     /// @inheritdoc IInstructionSender
     function createInstruction(
@@ -192,8 +230,18 @@ contract InstructionSender is IInstructionSender {
     }
 
     /// @inheritdoc IInstructionSender
+    function getPMWProjectId() external view override returns (uint256) {
+        return _pmwProjectId;
+    }
+
+    /// @inheritdoc IInstructionSender
     function setPMWProjectId(uint256 projectId) external override onlyAdmin {
         _pmwProjectId = projectId;
+    }
+
+    /// @notice Store a response for an instruction (called by FCC extension)
+    function setResponse(bytes32 instructionId, bytes calldata response) external onlyVerifier {
+        _responses[instructionId] = response;
     }
 
     // --- Internal Functions ---

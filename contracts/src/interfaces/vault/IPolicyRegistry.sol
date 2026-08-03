@@ -3,12 +3,11 @@ pragma solidity ^0.8.27;
 
 /// @title IPolicyRegistry
 /// @notice Registry for risk policies that govern Aegis vault operations.
-///         Each policy defines constraints on deposits, withdrawals, rebalancing,
-///         and risk thresholds. Policies are enforced by the VaultCore and
-///         ActionExecutor modules.
+///         API matches the Aegis blueprint (Section 9.4.5) exactly:
+///         maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets.
 /// @dev Policies are created by vault operators and can be assigned to specific
-///      depositors or applied globally. The PolicyEngine in the FCC extension
-///      reads these policies and enforces them deterministically within TEE.
+///      depositors. The PolicyEngine in the FCC extension reads these policies
+///      and enforces them deterministically within TEE.
 interface IPolicyRegistry {
     // --- Enums ---
 
@@ -22,15 +21,15 @@ interface IPolicyRegistry {
 
     /// @notice Type of policy action
     enum PolicyAction {
-        ALLOW,      // Action is allowed
-        REQUIRE_APPROVAL,  // Action requires additional approval
-        DELAY,      // Action is delayed by a time lock
-        BLOCK       // Action is blocked
+        ALLOW,              // Action is allowed
+        REQUIRE_APPROVAL,   // Action requires additional approval
+        DELAY,              // Action is delayed by a time lock
+        BLOCK               // Action is blocked
     }
 
     // --- Structs ---
 
-    /// @notice A risk policy definition
+    /// @notice A risk policy definition — matches the report's Section 9.4.5 spec
     struct Policy {
         uint256 policyId;               // Unique policy identifier
         address owner;                  // Policy owner (vault operator)
@@ -40,10 +39,15 @@ interface IPolicyRegistry {
         bool isActive;                  // Whether the policy is active
         uint256 createdAt;              // Creation timestamp
         uint256 updatedAt;              // Last update timestamp
+        // --- Report-specified fields (Section 9.4.5) ---
+        uint256 maxDrawdownBps;         // Maximum drawdown allowed (basis points, e.g., 1500 = 15%)
+        uint256 maxSingleExposureBps;   // Maximum single-asset exposure (basis points, e.g., 4000 = 40%)
+        uint256 hedgeThresholdBps;      // Hedge trigger threshold (basis points, e.g., 800 = 8%)
+        address[] allowedAssets;         // Whitelist of allowed asset addresses
+        // --- Extended fields ---
         uint256 maxDepositPerTx;        // Maximum deposit per transaction (UBA)
         uint256 maxWithdrawalPerTx;     // Maximum withdrawal per transaction (UBA)
         uint256 maxTotalExposure;       // Maximum total vault exposure (USD, 5 decimals)
-        uint256 maxSinglePositionRatio; // Maximum ratio of single position to total (basis points)
         uint256 minCollateralRatio;     // Minimum collateral ratio (basis points, e.g., 15000 = 150%)
         uint256 maxLeverage;            // Maximum leverage ratio (basis points)
         uint256 withdrawalDelaySeconds; // Delay before withdrawal can be completed
@@ -82,21 +86,29 @@ interface IPolicyRegistry {
         address indexed depositor
     );
 
-    // --- Functions ---
+    // --- Report-Specified API (Section 9.4.5) ---
+
+    /// @notice Set a policy's parameters
+    /// @param policyId The policy to set
+    /// @param p The policy data
+    function setPolicy(uint256 policyId, Policy calldata p) external;
+
+    /// @notice Get a policy by ID
+    /// @param policyId The policy ID
+    /// @return policy The policy data
+    function getPolicy(uint256 policyId) external view returns (Policy memory policy);
+
+    // --- Extended API ---
 
     /// @notice Create a new policy
-    /// @param name Policy name
-    /// @param description Policy description
-    /// @param riskLevel Risk level classification
-    /// @param maxDepositPerTx Maximum deposit per transaction
-    /// @param maxWithdrawalPerTx Maximum withdrawal per transaction
-    /// @param maxTotalExposure Maximum total vault exposure
-    /// @param minCollateralRatio Minimum collateral ratio (basis points)
-    /// @return policyId The ID of the newly created policy
     function createPolicy(
         string calldata name,
         string calldata description,
         RiskLevel riskLevel,
+        uint256 maxDrawdownBps,
+        uint256 maxSingleExposureBps,
+        uint256 hedgeThresholdBps,
+        address[] calldata allowedAssets,
         uint256 maxDepositPerTx,
         uint256 maxWithdrawalPerTx,
         uint256 maxTotalExposure,
@@ -104,39 +116,18 @@ interface IPolicyRegistry {
     ) external returns (uint256 policyId);
 
     /// @notice Update a policy's parameters
-    /// @param policyId The policy to update
-    /// @param fieldChanged Description of the field changed
-    function updatePolicy(
-        uint256 policyId,
-        string calldata fieldChanged
-    ) external;
+    function updatePolicy(uint256 policyId, string calldata fieldChanged) external;
 
     /// @notice Activate or deactivate a policy
-    /// @param policyId The policy to toggle
-    /// @param isActive Whether the policy should be active
     function setPolicyStatus(uint256 policyId, bool isActive) external;
 
     /// @notice Assign a policy to a depositor
-    /// @param policyId The policy to assign
-    /// @param depositor The depositor to assign the policy to
     function assignPolicy(uint256 policyId, address depositor) external;
 
-    /// @notice Get a policy by ID
-    /// @param policyId The policy ID
-    /// @return policy The policy data
-    function getPolicy(uint256 policyId) external view returns (Policy memory policy);
-
     /// @notice Get the policy assigned to a depositor
-    /// @param depositor The depositor's address
-    /// @return policy The assigned policy
     function getPolicyForDepositor(address depositor) external view returns (Policy memory policy);
 
     /// @notice Check if an action is allowed under a policy
-    /// @param policyId The policy to check
-    /// @param actionType The type of action (0=deposit, 1=withdraw, 2=rebalance)
-    /// @param amount The amount of the action
-    /// @return allowed Whether the action is allowed
-    /// @return action The policy action to take
     function checkAction(
         uint256 policyId,
         uint8 actionType,
@@ -144,14 +135,9 @@ interface IPolicyRegistry {
     ) external view returns (bool allowed, PolicyAction action);
 
     /// @notice Get the total number of policies
-    /// @return count Number of policies
     function getPolicyCount() external view returns (uint256 count);
 
     /// @notice Validate that a deposit complies with the policy
-    /// @param policyId The policy to validate against
-    /// @param depositAmount The proposed deposit amount
-    /// @param currentTotalExposure Current total vault exposure
-    /// @return isValid Whether the deposit is valid under the policy
     function validateDeposit(
         uint256 policyId,
         uint256 depositAmount,
@@ -159,10 +145,6 @@ interface IPolicyRegistry {
     ) external view returns (bool isValid);
 
     /// @notice Validate that a withdrawal complies with the policy
-    /// @param policyId The policy to validate against
-    /// @param withdrawalAmount The proposed withdrawal amount
-    /// @param currentPositionValue The current position's USD value
-    /// @return isValid Whether the withdrawal is valid under the policy
     function validateWithdrawal(
         uint256 policyId,
         uint256 withdrawalAmount,

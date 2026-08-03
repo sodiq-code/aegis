@@ -153,10 +153,16 @@ contract VaultContractsForkTest is Test {
         assertTrue(verifierRole.isVerifiedTEE(testVerifier));
 
         // 2. Create a custom policy
+        address[] memory assets = new address[](1);
+        assets[0] = address(0); // FXRP placeholder
         uint256 policyId = policyRegistry.createPolicy(
             "Institutional Vault",
             "Policy for institutional depositors",
             IPolicyRegistry.RiskLevel.MEDIUM,
+            2500,             // 25% max drawdown
+            6000,             // 60% max single exposure
+            1200,             // 12% hedge threshold
+            assets,
             1_000_000_000,   // 1000 XRP max deposit
             500_000_000,     // 500 XRP max withdrawal
             100_000_000_000, // 100,000 XRP max total exposure

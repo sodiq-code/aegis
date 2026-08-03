@@ -6,6 +6,8 @@ import "./interfaces/vault/IVerifierRole.sol";
 
 /// @title SolvencyRoot
 /// @notice Merkle root computation and on-chain publication for Aegis vault solvency proofs.
+///         Implements the report-specified API (Section 9.4.5):
+///         publishRoot(root, surplusBps), verifySolvency(proof, leaf).
 contract SolvencyRoot is ISolvencyRoot {
     // --- State Variables ---
 
@@ -23,6 +25,9 @@ contract SolvencyRoot is ISolvencyRoot {
 
     /// @notice VerifierRole contract for access control
     IVerifierRole public verifierRole;
+
+    /// @notice Mapping from instructionId => response data
+    mapping(bytes32 => bytes) private _responses;
 
     // --- Modifiers ---
 
@@ -51,7 +56,113 @@ contract SolvencyRoot is ISolvencyRoot {
         _minCollateralRatio = initialMinCollateralRatio;
     }
 
-    // --- View Functions ---
+    // --- Report-Specified API (Section 9.4.5) ---
+
+    /// @inheritdoc ISolvencyRoot
+    function publishRoot(bytes32 root, uint256 surplusBps) external override onlyVerifier {
+        require(root != bytes32(0), "SolvencyRoot: zero root");
+
+        // Store the proof
+        SolvencyProof storage proof = _proofs[root];
+        require(proof.merkleRoot == bytes32(0), "SolvencyRoot: proof already exists");
+
+        proof.merkleRoot = root;
+        proof.surplusBps = surplusBps;
+        proof.timestamp = block.timestamp;
+        proof.attestor = msg.sender;
+        proof.isValid = true;
+
+        // Invalidate previous proof
+        if (_currentProof.merkleRoot != bytes32(0)) {
+            _currentProof.isValid = false;
+        }
+
+        _currentProof = proof;
+        _proofHistory.push(root);
+
+        emit SolvencyProofPublished(root, surplusBps, 0, 0, 0, msg.sender);
+    }
+
+    /// @inheritdoc ISolvencyRoot
+    function verifySolvency(bytes32[] calldata proof, bytes32 leaf) external view override returns (bool) {
+        if (_currentProof.merkleRoot == bytes32(0) || !_currentProof.isValid) {
+            return false;
+        }
+        return _verifyMerkleProof(leaf, proof, _currentProof.merkleRoot);
+    }
+
+    // --- Extended API ---
+
+    /// @inheritdoc ISolvencyRoot
+    function publishSolvencyProof(
+        bytes32 merkleRoot,
+        uint256 totalFxrpCollateral,
+        uint256 totalLiabilities,
+        uint256 collateralRatio,
+        uint256 votingRound
+    ) external override onlyVerifier {
+        require(merkleRoot != bytes32(0), "SolvencyRoot: zero merkle root");
+
+        SolvencyProof storage proof = _proofs[merkleRoot];
+        require(proof.merkleRoot == bytes32(0), "SolvencyRoot: proof already exists");
+
+        // Compute surplus in basis points
+        uint256 surplusBps = 0;
+        if (totalLiabilities > 0) {
+            surplusBps = ((totalFxrpCollateral - totalLiabilities) * 10000) / totalLiabilities;
+        } else {
+            surplusBps = 999999; // Fully solvent with no liabilities
+        }
+
+        proof.merkleRoot = merkleRoot;
+        proof.surplusBps = surplusBps;
+        proof.totalFxrpCollateral = totalFxrpCollateral;
+        proof.totalLiabilities = totalLiabilities;
+        proof.collateralRatio = collateralRatio;
+        proof.timestamp = block.timestamp;
+        proof.votingRound = votingRound;
+        proof.attestor = msg.sender;
+        proof.isValid = true;
+
+        // Invalidate previous proof
+        if (_currentProof.merkleRoot != bytes32(0)) {
+            _currentProof.isValid = false;
+        }
+
+        _currentProof = proof;
+        _proofHistory.push(merkleRoot);
+
+        // Check solvency warning
+        if (collateralRatio < _minCollateralRatio) {
+            emit SolvencyWarning(collateralRatio, _minCollateralRatio, block.timestamp);
+        }
+
+        emit SolvencyProofPublished(merkleRoot, surplusBps, totalFxrpCollateral, collateralRatio, votingRound, msg.sender);
+    }
+
+    /// @inheritdoc ISolvencyRoot
+    function verifyPosition(
+        uint256 positionId,
+        address depositor,
+        uint256 fxrpAmount,
+        uint256 usdValuation,
+        bytes32[] calldata merkleProof
+    ) external view override returns (bool) {
+        if (_currentProof.merkleRoot == bytes32(0) || !_currentProof.isValid) {
+            return false;
+        }
+
+        // Compute the leaf hash for the position
+        bytes32 leaf = keccak256(abi.encodePacked(
+            positionId,
+            depositor,
+            fxrpAmount,
+            usdValuation
+        ));
+
+        // Verify the Merkle proof
+        return _verifyMerkleProof(leaf, merkleProof, _currentProof.merkleRoot);
+    }
 
     /// @inheritdoc ISolvencyRoot
     function getCurrentSolvencyProof() external view override returns (SolvencyProof memory) {
@@ -85,81 +196,6 @@ contract SolvencyRoot is ISolvencyRoot {
     }
 
     /// @inheritdoc ISolvencyRoot
-    function getMinCollateralRatio() external view override returns (uint256) {
-        return _minCollateralRatio;
-    }
-
-    /// @inheritdoc ISolvencyRoot
-    function verifyPosition(
-        uint256 positionId,
-        address depositor,
-        uint256 fxrpAmount,
-        uint256 usdValuation,
-        bytes32[] calldata merkleProof
-    ) external view override returns (bool) {
-        if (_currentProof.merkleRoot == bytes32(0) || !_currentProof.isValid) {
-            return false;
-        }
-
-        // Compute the leaf hash for the position
-        bytes32 leaf = keccak256(abi.encodePacked(
-            positionId,
-            depositor,
-            fxrpAmount,
-            usdValuation
-        ));
-
-        // Verify the Merkle proof
-        return _verifyMerkleProof(leaf, merkleProof, _currentProof.merkleRoot);
-    }
-
-    // --- State-Changing Functions ---
-
-    /// @inheritdoc ISolvencyRoot
-    function publishSolvencyProof(
-        bytes32 merkleRoot,
-        uint256 totalFxrpCollateral,
-        uint256 totalLiabilities,
-        uint256 collateralRatio,
-        uint256 votingRound
-    ) external override onlyVerifier {
-        require(merkleRoot != bytes32(0), "SolvencyRoot: zero merkle root");
-
-        SolvencyProof storage proof = _proofs[merkleRoot];
-        require(proof.merkleRoot == bytes32(0), "SolvencyRoot: proof already exists");
-
-        proof.merkleRoot = merkleRoot;
-        proof.totalFxrpCollateral = totalFxrpCollateral;
-        proof.totalLiabilities = totalLiabilities;
-        proof.collateralRatio = collateralRatio;
-        proof.timestamp = block.timestamp;
-        proof.votingRound = votingRound;
-        proof.attestor = msg.sender;
-        proof.isValid = true;
-
-        // Invalidate previous proof
-        if (_currentProof.merkleRoot != bytes32(0)) {
-            _currentProof.isValid = false;
-        }
-
-        _currentProof = proof;
-        _proofHistory.push(merkleRoot);
-
-        // Check solvency warning
-        if (collateralRatio < _minCollateralRatio) {
-            emit SolvencyWarning(collateralRatio, _minCollateralRatio, block.timestamp);
-        }
-
-        emit SolvencyProofPublished(
-            merkleRoot,
-            totalFxrpCollateral,
-            collateralRatio,
-            votingRound,
-            msg.sender
-        );
-    }
-
-    /// @inheritdoc ISolvencyRoot
     function invalidateSolvencyProof(bytes32 merkleRoot, string calldata reason)
         external
         override
@@ -174,6 +210,11 @@ contract SolvencyRoot is ISolvencyRoot {
         }
 
         emit SolvencyProofInvalidated(merkleRoot, reason);
+    }
+
+    /// @inheritdoc ISolvencyRoot
+    function getMinCollateralRatio() external view override returns (uint256) {
+        return _minCollateralRatio;
     }
 
     /// @inheritdoc ISolvencyRoot

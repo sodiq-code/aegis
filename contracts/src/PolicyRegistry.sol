@@ -5,8 +5,9 @@ import "./interfaces/vault/IPolicyRegistry.sol";
 
 /// @title PolicyRegistry
 /// @notice Registry for risk policies that govern Aegis vault operations.
-///         Implements the IPolicyRegistry interface with full policy CRUD,
-///         assignment, and validation logic.
+///         Implements the report-specified API (Section 9.4.5):
+///         maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets.
+///         Three default policies (Conservative/Balanced/Aggressive) are created at deploy.
 contract PolicyRegistry is IPolicyRegistry {
     // --- State Variables ---
 
@@ -42,34 +43,84 @@ contract PolicyRegistry is IPolicyRegistry {
         _nextPolicyId = 1;
 
         // Create default policies for each risk level
+        // Conservative (LOW): max 15% drawdown, 40% single exposure, 8% hedge threshold
+        address[] memory conservativeAssets = new address[](1);
+        conservativeAssets[0] = address(0); // FXRP placeholder — will be set by vault
         _createDefaultPolicy("Conservative", "Low risk tolerance policy", RiskLevel.LOW,
-            100_000_000,   // 100 XRP max deposit per tx
-            50_000_000,    // 50 XRP max withdrawal per tx
-            10_000_000_000, // 10,000 XRP max total exposure
-            20000           // 200% min collateral ratio
+            1500,  // 15% max drawdown
+            4000,  // 40% max single exposure
+            800,   // 8% hedge threshold
+            conservativeAssets,
+            100_000_000,     // 100 XRP max deposit per tx
+            50_000_000,      // 50 XRP max withdrawal per tx
+            10_000_000_000,  // 10,000 XRP max total exposure
+            20000            // 200% min collateral ratio
         );
 
+        // Balanced (MEDIUM): max 25% drawdown, 60% single exposure, 12% hedge threshold
+        address[] memory balancedAssets = new address[](2);
+        balancedAssets[0] = address(0); // FXRP
+        balancedAssets[1] = address(0); // sFLR placeholder
         _createDefaultPolicy("Balanced", "Medium risk tolerance policy", RiskLevel.MEDIUM,
-            500_000_000,   // 500 XRP max deposit per tx
-            250_000_000,   // 250 XRP max withdrawal per tx
-            50_000_000_000, // 50,000 XRP max total exposure
-            15000           // 150% min collateral ratio
+            2500,  // 25% max drawdown
+            6000,  // 60% max single exposure
+            1200,  // 12% hedge threshold
+            balancedAssets,
+            500_000_000,     // 500 XRP max deposit per tx
+            250_000_000,     // 250 XRP max withdrawal per tx
+            50_000_000_000,  // 50,000 XRP max total exposure
+            15000            // 150% min collateral ratio
         );
 
+        // Aggressive (HIGH): max 40% drawdown, 80% single exposure, 20% hedge threshold
+        address[] memory aggressiveAssets = new address[](3);
+        aggressiveAssets[0] = address(0); // FXRP
+        aggressiveAssets[1] = address(0); // sFLR
+        aggressiveAssets[2] = address(0); // Other
         _createDefaultPolicy("Aggressive", "High risk tolerance policy", RiskLevel.HIGH,
-            2_000_000_000, // 2,000 XRP max deposit per tx
-            1_000_000_000, // 1,000 XRP max withdrawal per tx
-            200_000_000_000, // 200,000 XRP max total exposure
-            12000           // 120% min collateral ratio
+            4000,  // 40% max drawdown
+            8000,  // 80% max single exposure
+            2000,  // 20% hedge threshold
+            aggressiveAssets,
+            2_000_000_000,     // 2,000 XRP max deposit per tx
+            1_000_000_000,     // 1,000 XRP max withdrawal per tx
+            200_000_000_000,   // 200,000 XRP max total exposure
+            12000              // 120% min collateral ratio
         );
     }
 
-    // --- View Functions ---
+    // --- Report-Specified API (Section 9.4.5) ---
+
+    /// @inheritdoc IPolicyRegistry
+    function setPolicy(uint256 policyId, Policy calldata p) external override onlyPolicyOwner(policyId) {
+        Policy storage policy = _policies[policyId];
+
+        // Update all fields from the provided policy
+        policy.maxDrawdownBps = p.maxDrawdownBps;
+        policy.maxSingleExposureBps = p.maxSingleExposureBps;
+        policy.hedgeThresholdBps = p.hedgeThresholdBps;
+        policy.allowedAssets = p.allowedAssets;
+        policy.maxDepositPerTx = p.maxDepositPerTx;
+        policy.maxWithdrawalPerTx = p.maxWithdrawalPerTx;
+        policy.maxTotalExposure = p.maxTotalExposure;
+        policy.minCollateralRatio = p.minCollateralRatio;
+        policy.maxLeverage = p.maxLeverage;
+        policy.withdrawalDelaySeconds = p.withdrawalDelaySeconds;
+        policy.rebalanceThresholdBps = p.rebalanceThresholdBps;
+        policy.maxSlippageBps = p.maxSlippageBps;
+        policy.onRiskBreach = p.onRiskBreach;
+        policy.onSolvencyWarning = p.onSolvencyWarning;
+        policy.updatedAt = block.timestamp;
+
+        emit PolicyUpdated(policyId, msg.sender, "bulk update");
+    }
 
     /// @inheritdoc IPolicyRegistry
     function getPolicy(uint256 policyId) external view override policyExists(policyId) returns (Policy memory) {
         return _policies[policyId];
     }
+
+    // --- Extended API ---
 
     /// @inheritdoc IPolicyRegistry
     function getPolicyForDepositor(address depositor) external view override returns (Policy memory) {
@@ -146,19 +197,22 @@ contract PolicyRegistry is IPolicyRegistry {
         return true;
     }
 
-    // --- State-Changing Functions ---
-
     /// @inheritdoc IPolicyRegistry
     function createPolicy(
         string calldata name,
         string calldata description,
         RiskLevel riskLevel,
+        uint256 maxDrawdownBps,
+        uint256 maxSingleExposureBps,
+        uint256 hedgeThresholdBps,
+        address[] calldata allowedAssets,
         uint256 maxDepositPerTx,
         uint256 maxWithdrawalPerTx,
         uint256 maxTotalExposure,
         uint256 minCollateralRatio
     ) external override returns (uint256) {
         return _createDefaultPolicy(name, description, riskLevel,
+            maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets,
             maxDepositPerTx, maxWithdrawalPerTx, maxTotalExposure, minCollateralRatio);
     }
 
@@ -199,6 +253,10 @@ contract PolicyRegistry is IPolicyRegistry {
         string memory name,
         string memory description,
         RiskLevel riskLevel,
+        uint256 maxDrawdownBps,
+        uint256 maxSingleExposureBps,
+        uint256 hedgeThresholdBps,
+        address[] memory allowedAssets,
         uint256 maxDepositPerTx,
         uint256 maxWithdrawalPerTx,
         uint256 maxTotalExposure,
@@ -215,10 +273,15 @@ contract PolicyRegistry is IPolicyRegistry {
         policy.isActive = true;
         policy.createdAt = block.timestamp;
         policy.updatedAt = block.timestamp;
+        // Report-specified fields
+        policy.maxDrawdownBps = maxDrawdownBps;
+        policy.maxSingleExposureBps = maxSingleExposureBps;
+        policy.hedgeThresholdBps = hedgeThresholdBps;
+        policy.allowedAssets = allowedAssets;
+        // Extended fields
         policy.maxDepositPerTx = maxDepositPerTx;
         policy.maxWithdrawalPerTx = maxWithdrawalPerTx;
         policy.maxTotalExposure = maxTotalExposure;
-        policy.maxSinglePositionRatio = 5000; // 50% default
         policy.minCollateralRatio = minCollateralRatio;
         policy.maxLeverage = 10000; // 100% = 1x leverage
         policy.withdrawalDelaySeconds = 86400; // 1 day

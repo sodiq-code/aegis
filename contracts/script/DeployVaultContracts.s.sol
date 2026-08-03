@@ -6,6 +6,7 @@ import "../src/VerifierRole.sol";
 import "../src/PolicyRegistry.sol";
 import "../src/SolvencyRoot.sol";
 import "../src/InstructionSender.sol";
+import "../src/VaultCore.sol";
 
 /// @title DeployVaultContracts
 /// @notice Deployment script for all 5 Aegis vault contracts on Coston2
@@ -15,6 +16,10 @@ contract DeployVaultContracts is Script {
 
     // Minimum collateral ratio (150%)
     uint256 constant MIN_COLLATERAL_RATIO = 15000;
+
+    // Deposit limits
+    uint256 constant MIN_DEPOSIT = 1_000_000;     // 1 XRP minimum
+    uint256 constant MAX_DEPOSIT = 10_000_000_000; // 10,000 XRP maximum
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -41,22 +46,32 @@ contract DeployVaultContracts is Script {
         );
         console.log("InstructionSender deployed at:", address(instructionSender));
 
-        // 5. Deploy VaultCore (requires FXRP token approval setup)
-        // VaultCore needs the FlareContractRegistry, VerifierRole, PolicyRegistry,
-        // SolvencyRoot, and InstructionSender addresses
+        // 5. Deploy VaultCore
+        VaultCore vaultCore = new VaultCore(
+            FLARE_REGISTRY,           // FlareContractRegistry
+            address(verifierRole),     // VerifierRole
+            address(policyRegistry),   // PolicyRegistry
+            address(solvencyRoot),     // SolvencyRoot
+            address(instructionSender),// InstructionSender
+            MIN_DEPOSIT,              // Minimum deposit
+            MAX_DEPOSIT               // Maximum deposit
+        );
+        console.log("VaultCore deployed at:", address(vaultCore));
+
+        // 6. Verify the deployment
+        IVaultCore.VaultConfig memory config = vaultCore.getConfig();
         console.log("");
         console.log("=== Deployment Complete ===");
         console.log("VerifierRole:", address(verifierRole));
         console.log("PolicyRegistry:", address(policyRegistry));
         console.log("SolvencyRoot:", address(solvencyRoot));
         console.log("InstructionSender:", address(instructionSender));
+        console.log("VaultCore:", address(vaultCore));
         console.log("");
-        console.log("VaultCore deployment requires:");
-        console.log("  - FlareContractRegistry:", FLARE_REGISTRY);
-        console.log("  - VerifierRole:", address(verifierRole));
-        console.log("  - PolicyRegistry:", address(policyRegistry));
-        console.log("  - SolvencyRoot:", address(solvencyRoot));
-        console.log("  - InstructionSender:", address(instructionSender));
+        console.log("VaultCore Config:");
+        console.log("  AssetManagerFXRP:", config.assetManagerFXRP);
+        console.log("  FXRP Token:", config.fxrpToken);
+        console.log("  FTSO V2:", config.ftsoV2);
 
         vm.stopBroadcast();
     }
