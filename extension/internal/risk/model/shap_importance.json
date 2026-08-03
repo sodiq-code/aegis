@@ -1,0 +1,48 @@
+{
+  "feature_importance": {
+    "xrp_drawdown": 1.0394046306610107,
+    "xrp_vol_24h": 0.5779279470443726,
+    "leverage_ratio": 0.3954676687717438,
+    "hours_since_rebalance": 0.3031458556652069,
+    "var_95": 0.17892560362815857,
+    "xrp_price_change_24h": 0.10326924175024033,
+    "btc_vol_24h": 0.09072557091712952,
+    "xrp_vol_6h": 0.061356499791145325,
+    "xrp_price_change_1h": 0.054889027029275894,
+    "xrp_flr_corr": 0.05104552209377289,
+    "xrp_concentration": 0.044191036373376846,
+    "eth_vol_24h": 0.04312487691640854,
+    "xrp_price_change_6h": 0.040591683238744736,
+    "flare_exposure": 0.04042860120534897,
+    "xrp_momentum": 0.035294823348522186,
+    "flr_vol_24h": 0.0300922729074955,
+    "flr_price_change_24h": 0.026013672351837158,
+    "hedge_pnl_pct": 0.020937075838446617,
+    "cross_chain_exposure": 0.012765436433255672,
+    "xrp_vol_1h": 0.0
+  },
+  "top_features": [
+    "xrp_drawdown",
+    "xrp_vol_24h",
+    "leverage_ratio",
+    "hours_since_rebalance",
+    "var_95",
+    "xrp_price_change_24h",
+    "btc_vol_24h",
+    "xrp_vol_6h",
+    "xrp_price_change_1h",
+    "xrp_flr_corr"
+  ],
+  "top_values": [
+    1.0394046306610107,
+    0.5779279470443726,
+    0.3954676687717438,
+    0.3031458556652069,
+    0.17892560362815857,
+    0.10326924175024033,
+    0.09072557091712952,
+    0.061356499791145325,
+    0.054889027029275894,
+    0.05104552209377289
+  ]
+}

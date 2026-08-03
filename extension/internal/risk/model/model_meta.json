@@ -1,0 +1,33 @@
+{
+  "model_type": "XGBoost",
+  "n_trees": 200,
+  "max_depth": 6,
+  "learning_rate": 0.1,
+  "feature_count": 20,
+  "risk_score_range": [
+    0,
+    100
+  ],
+  "action_classes": 4,
+  "action_labels": [
+    "hold",
+    "rebalance",
+    "hedge",
+    "deleverage"
+  ],
+  "training_timestamp": 1785720653,
+  "coston2_ftso_feeds": {
+    "XRP/USD": "015852502f55534400000000000000000000000000",
+    "FLR/USD": "01464c522f55534400000000000000000000000000",
+    "BTC/USD": "014254432f55534400000000000000000000000000",
+    "ETH/USD": "014554482f55534400000000000000000000000000"
+  },
+  "training_report": {
+    "score_mae": 0.6064603678929994,
+    "score_r2": 0.9962256908726722,
+    "action_accuracy": 0.9836448598130841,
+    "training_samples": 2136,
+    "feature_count": 20,
+    "shap_top_features": null
+  }
+}

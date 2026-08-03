@@ -173,6 +173,8 @@ aegis/
 
 **M1 Checkpoint:** ✅ PASSED (25/25 checks green) — All vault contracts working end-to-end on Coston2. PMW GO/NO-GO: **GO**.
 
+**Task 10 (Day 10):** ✅ COMPLETED — XGBoost risk model trained on historical FTSO data (200 trees, depth 6). Model bundled into extension; Go inference module runs in TEE. 20 features (rolling volatility, leverage ratio, concentration, drawdown, VaR, etc.) → risk score (0-100) + action classification (hold/rebalance/hedge/deleverage). SHAP explainability for auditor interpretability.
+
 ## Roadmap
 
 | Phase | Timeline | Milestone |

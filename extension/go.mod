@@ -3,6 +3,7 @@ module extension-scaffold
 go 1.25.1
 
 require (
+	github.com/dmitryikh/leaves v0.0.0-20230708180554-25d19a787328
 	github.com/ethereum/go-ethereum v1.17.4
 	github.com/flare-foundation/go-flare-common v1.2.2-0.20260623111601-c573c79c0924
 	github.com/flare-foundation/tee-node v0.0.21-0.20260619120252-31fc839ae6d2

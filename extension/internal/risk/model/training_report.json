@@ -1,0 +1,8 @@
+{
+  "score_mae": 0.6064603678929994,
+  "score_r2": 0.9962256908726722,
+  "action_accuracy": 0.9836448598130841,
+  "training_samples": 2136,
+  "feature_count": 20,
+  "shap_top_features": null
+}

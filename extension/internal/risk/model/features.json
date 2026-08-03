@@ -1,0 +1,37 @@
+{
+  "feature_names": [
+    "xrp_vol_24h",
+    "flr_vol_24h",
+    "btc_vol_24h",
+    "eth_vol_24h",
+    "xrp_vol_6h",
+    "xrp_vol_1h",
+    "xrp_price_change_1h",
+    "xrp_price_change_6h",
+    "xrp_price_change_24h",
+    "flr_price_change_24h",
+    "leverage_ratio",
+    "xrp_concentration",
+    "flare_exposure",
+    "cross_chain_exposure",
+    "hedge_pnl_pct",
+    "hours_since_rebalance",
+    "xrp_momentum",
+    "xrp_flr_corr",
+    "xrp_drawdown",
+    "var_95"
+  ],
+  "feature_count": 20,
+  "action_labels": [
+    "hold",
+    "rebalance",
+    "hedge",
+    "deleverage"
+  ],
+  "action_descriptions": {
+    "0": "hold - no action needed, risk within acceptable range",
+    "1": "rebalance - portfolio rebalance recommended, moderate risk",
+    "2": "hedge - hedge position recommended, elevated risk",
+    "3": "deleverage - reduce leverage urgently, critical risk"
+  }
+}
