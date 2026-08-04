@@ -21,8 +21,8 @@ import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
 import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import { useWalletStore, useXamanWallet } from '@/lib/wallet-auth';
 import {
-  Wallet, Loader2, CheckCircle2, ArrowRight, ShieldCheck,
-  FileCheck, CircleDollarSign, Lock, Quote
+  Wallet, Loader2, CheckCircle2, ShieldCheck,
+  CircleDollarSign, Quote
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -153,7 +153,7 @@ export function DepositFlow() {
                 const stepIdx = getStepIndex(stepInfo.step);
                 const isActive = stepIdx === currentStepIndex;
                 const isDone = stepIdx < currentStepIndex;
-                const isPending = stepIdx > currentStepIndex;
+                const _isPending = stepIdx > currentStepIndex;
 
                 return (
                   <motion.div

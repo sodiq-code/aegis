@@ -52,7 +52,8 @@ const EVENT_TOPICS = {
 const KNOWN_ACTIVITY_BLOCK = 33565198;
 
 // Known transaction hash at M3 checkpoint (verified on-chain)
-const KNOWN_M3_TX_HASH = '0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481';
+// Used for reference; real tx hashes are fetched from on-chain events
+const _KNOWN_M3_TX_HASH = '0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481';
 
 interface VaultEvent {
   type: string;
@@ -198,7 +199,7 @@ async function scanBlockRange(fromBlock: number, toBlock: number): Promise<Vault
     const merkleRoot = log.topics[1] || '0x0';
     const attestor = log.topics[2] ? decodeAddress(log.topics[2]) : '0x0';
     const surplusBps = decodeUint256(log.data, 0);
-    const totalFxrpCollateral = decodeUint256(log.data, 1);
+    const _totalFxrpCollateral = decodeUint256(log.data, 1);
     const collateralRatio = decodeUint256(log.data, 2);
     const votingRound = decodeUint256(log.data, 3);
     

@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { policyId, action, fieldChanged, isActive } = body;
 
-    if (!policyId) {
+    if (policyId === undefined || policyId === null) {
       return NextResponse.json(
         { error: 'Missing policyId' },
         { status: 400 }

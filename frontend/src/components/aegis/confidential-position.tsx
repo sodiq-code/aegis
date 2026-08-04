@@ -19,7 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useVaultState } from '@/hooks/use-aegis-data';
 import {
-  Lock, Unlock, Eye, EyeOff, Shield, ShieldCheck,
+  Lock, Eye, EyeOff, Shield, ShieldCheck,
   Loader2, CheckCircle2, AlertTriangle, FileLock2, Quote
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
     // --- Step 3: Try FDC verification for the voting round ---
     let fdcVerified = false;
     let fdcMerkleRoot = '';
-    let votingRound = currentVotingRound;
+    const votingRound = currentVotingRound;
 
     if (votingRound > 0) {
       try {

@@ -70,7 +70,7 @@ const SIMULATED_NEW_ROOT = '0xf6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0
 export function RiskRebalance() {
   const [currentStep, setCurrentStep] = useState<RebalanceStep>('idle');
   const [riskScore, setRiskScore] = useState(7.52);
-  const [animatingRisk, setAnimatingRisk] = useState(false);
+  const [_animatingRisk, setAnimatingRisk] = useState(false);
   const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isRunning = currentStep !== 'idle' && currentStep !== 'complete';

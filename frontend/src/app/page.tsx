@@ -21,7 +21,7 @@ import { AegisErrorBoundary } from '@/components/aegis/error-boundary';
 import { useWalletStore } from '@/lib/wallet-auth';
 import { Shield, Wallet, ArrowRight, Sparkles, FileLock2, ScanSearch, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // View transition animation config

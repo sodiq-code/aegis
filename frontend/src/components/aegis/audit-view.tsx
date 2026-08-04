@@ -23,7 +23,7 @@ import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import {
   FileCheck, CheckCircle2, AlertTriangle, Shield, Eye, EyeOff,
   RefreshCw, Search, Clock, ShieldCheck, Loader2, Info,
-  Fingerprint, FileLock2, ScanSearch, ExternalLink, Link2, Quote
+  Fingerprint, FileLock2, ScanSearch, Quote
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';

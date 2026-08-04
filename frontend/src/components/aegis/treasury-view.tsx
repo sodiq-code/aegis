@@ -24,8 +24,8 @@ import { FdcAttestationPanel } from '@/components/aegis/fdc-attestation-panel';
 import { SolvencyChart } from '@/components/aegis/solvency-chart';
 import {
   Landmark, AlertTriangle, CheckCircle2, RefreshCw, Shield,
-  Activity, Clock, ExternalLink, ShieldAlert, ShieldCheck,
-  Wallet, FileCheck, Zap, CircleDollarSign, Info
+  Activity, Clock, ShieldAlert, ShieldCheck,
+  Wallet, FileCheck, Zap, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
@@ -38,7 +38,7 @@ export function TreasuryView() {
   const vault = vaultState?.vault;
   const isConnected = vaultState?.connected ?? false;
   const totalDeposited = vault ? (vault.totalDeposited / 1e6).toFixed(2) : '0.00';
-  const totalValuation = vault ? (vault.totalValuation / 1e6).toFixed(2) : '0.00';
+  const _totalValuation = vault ? (vault.totalValuation / 1e6).toFixed(2) : '0.00';
   const xrpPrice = vault?.xrpPrice?.toFixed(4) ?? '0.0000';
 
   // Derive solvency-related values

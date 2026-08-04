@@ -15,13 +15,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
+// Skeleton available for future loading states
 import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
 import { usePolicyData } from '@/hooks/use-aegis-data';
 import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import {
   Shield, AlertTriangle, Save, RotateCcw, Loader2,
-  CheckCircle2, Info, ShieldCheck, Lock, Unlock,
+  Info, ShieldCheck, Lock, Unlock,
   TrendingDown, BarChart3, ArrowRightLeft, Wallet
 } from 'lucide-react';
 

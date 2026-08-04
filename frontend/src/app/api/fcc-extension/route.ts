@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const endpoint = searchParams.get('endpoint') || '/health';
-    const url = `${FCC_EXTENSION_CONFIG.proxyUrl}${endpoint}`;
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${FCC_EXTENSION_CONFIG.proxyUrl}${normalizedEndpoint}`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -44,7 +45,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const endpoint = body.endpoint || '/health';
-    const url = `${FCC_EXTENSION_CONFIG.proxyUrl}${endpoint}`;
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${FCC_EXTENSION_CONFIG.proxyUrl}${normalizedEndpoint}`;
 
     const response = await fetch(url, {
       method: 'POST',

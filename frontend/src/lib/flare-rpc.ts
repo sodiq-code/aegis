@@ -5,7 +5,7 @@
  * Used for reading vault state, FTSO prices, and FDC attestations.
  */
 
-import { getFlareConfig, AEGIS_CONTRACTS, FTSO_FEEDS } from './flare-config';
+import { getFlareConfig, AEGIS_CONTRACTS } from './flare-config';
 
 interface JsonRpcResponse<T = unknown> {
   jsonrpc: '2.0';
