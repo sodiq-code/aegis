@@ -59,3 +59,41 @@ Stage Summary:
 - Dashboard has Coston2 explorer links in navbar, sidebar, and footer
 - All 7 Aegis contracts confirmed deployed on Coston2
 - Auto-polling ensures data stays fresh (30s vault, 60s proofs)
+
+---
+Task ID: dashboard-audit-and-features
+Agent: Main Agent
+Task: Comprehensive dashboard audit and implementation of all demo script features
+
+Work Log:
+- Read all source files: page.tsx, treasury-view.tsx, audit-view.tsx, policy-view.tsx, sidebar.tsx, navbar.tsx, block-explorer-link.tsx, use-aegis-data.ts, wallet-auth.ts, flare-config.ts
+- Read all API routes: vault-state, solvency, solvency-proofs, vault-events, verify-proof, fdc-attestation-status, fcc-extension, policy-state, policy-update, flare-rpc
+- Verified Coston2 RPC connectivity and block explorer URL format
+- Confirmed M3 checkpoint TX hash (0xfb4eeb96...) is real and exists on-chain at block 33,565,198
+- Confirmed all 7 Aegis contracts are deployed on Coston2
+- Identified missing features vs demo script requirements
+- Created deposit-flow.tsx: FXRP minting + vault deposit with 5-step animated flow + FDC attestation
+- Created confidential-position.tsx: On-chain vs TEE state comparison, TEE attestation proof
+- Created risk-rebalance.tsx: Drawdown simulation, AI agent, PMW signing flow, FDC attestation
+- Created fdc-attestation-panel.tsx: FDC infrastructure status with voting round and contract links
+- Created solvency-chart.tsx: Recharts line/area charts for risk score trend and solvency margin
+- Fixed useProofVerification hook: Replaced simulation with real /api/verify-proof endpoint call
+- Enhanced audit-view.tsx: Detailed verification result display with proof data, FDC verification, timestamp
+- Integrated all new components into treasury-view.tsx
+- Verified TypeScript compilation: 0 errors
+- Verified Next.js build: 13 routes, successful
+- Pushed to GitHub (commit 630de68)
+- Triggered Vercel deployment (dpl_BT2Bp4MU7cVacgRgFCWJvwthTF9F) - READY
+- Verified production: All APIs working, contracts deployed, real data flowing
+
+Stage Summary:
+- 5 new components created (deposit-flow, confidential-position, risk-rebalance, fdc-attestation-panel, solvency-chart)
+- 3 files modified (treasury-view, audit-view, use-aegis-data)
+- All demo script features implemented:
+  - Deposit Flow (Layer 1): XRPL → FXRP → Vault → FDC attestation
+  - Confidential Position (Layer 3): On-chain vs TEE, Merkle root, attestation proof
+  - Risk Rebalance (Layers 3+4): Drawdown → AI agent → PMW → FDC → solvency update
+  - Verifiable Solvency (Layer 5): Real /api/verify-proof endpoint, detailed result display
+  - FDC Attestation Status: Voting round, merkle root, contract deployment
+  - Data Visualizations: Recharts risk/solvency trend charts
+- Production URL: https://aegis-mantle-deploy-s-projects.vercel.app
