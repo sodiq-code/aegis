@@ -59,7 +59,7 @@ Aegis is structured as a five-layer system:
 | Contract | Address | Code Size |
 |---|---|---|
 | VaultCore | `0xcb08be1cc86d3f94c54c64682372e32f669134bc` | 5,103 bytes |
-| VerifierRole | `0xb513516d02d88be754c5204e132defbb0f4156e6` | **0 bytes (needs redeploy)** |
+| VerifierRole | `0xb513516d02d88be754c5204e132defbb0f4156e6` | 3,104 bytes |
 | PolicyRegistry | `0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5` | 5,133 bytes |
 | SolvencyRoot | `0xf52c1fd632d853ee46a48a82064d3f5d390f057d` | 4,277 bytes |
 | InstructionSender | `0xb175f16e1cea66360e354db4b178c04c69363c06` | 6,733 bytes |
@@ -102,7 +102,7 @@ The vault is currently in WARNING state: `isSolvent()` returns `(false, 14000)`,
 | Foundry (Solidity) | 143 tests pass, 0 failures |
 | Go extension | 13 packages pass |
 | TypeScript SDK | Compiles with `tsc --noEmit` |
-| Frontend | Next.js 16.1.3 builds with 7 API routes |
+| Frontend | Next.js 16.3.0 builds with 10 API routes, TypeScript clean, ESLint clean |
 | M4 checkpoint | 97/97 checks pass (demo rehearsal 6.80s) |
 
 ## Quickstart
@@ -303,9 +303,13 @@ aegis/
 - **FTSO V2 price feeds**: XRP/USD ~$1.07 via VaultCore, refreshed every ~90s
 - **FDC verification infrastructure**: FdcHub, FdcVerification, FdcRequestFeeConfigs, Fdc2Hub, Fdc2Verification
 - **PMW Diamond accessible**: FlareTeeManager on Coston2 (18 facets)
-- **Frontend routes verified**: 7 API routes, 3 hooks, 2 libs
+- **Frontend routes verified**: 10 API routes, 3 hooks, 2 libs
+- **CI pipeline**: GitHub Actions (forge test, tsc, eslint, next build, secret scan)
+- **ESLint**: 0 errors, 0 warnings
+- **TypeScript**: strict mode, no errors
+- **Production build**: 13 routes (3 static + 10 dynamic), compiles in <5s
 - **Vault solvency state**: `isSolvent()` = `(false, 14000)` -- WARNING (140% < 150% threshold)
-- **VerifierRole status**: Deployed but 0 bytes code -- needs redeployment
+- **VerifierRole status**: Deployed (3,104 bytes code)
 
 ## Roadmap
 
