@@ -1,28 +1,28 @@
 // Package policy implements the deterministic Policy Engine for the Aegis vault system.
 //
-// Task 12 (Day 12): Build ActionExecutor + Policy Engine (deterministic policy enforcement)
-// Per the report's Section 9.3.3:
+// Build ActionExecutor + Policy Engine (deterministic policy enforcement)
+// 
 //
-//   Component 2 (Policy Engine): a deterministic rule engine that maps the risk score
-//   and current positions to specific policy actions (rebalance, hedge, deleverage)
-//   within the constraints set by the on-chain PolicyRegistry.
+// Component 2 (Policy Engine): a deterministic rule engine that maps the risk score
+// and current positions to specific policy actions (rebalance, hedge, deleverage)
+// within the constraints set by the on-chain PolicyRegistry.
 //
-// Per the report's Section 9.3.12:
+// 
 //
-//   If the AI agent emits an erroneous instruction, the Policy Engine's deterministic
-//   constraints prevent the instruction from violating the on-chain policy parameters.
+// If the AI agent emits an erroneous instruction, the Policy Engine's deterministic
+// constraints prevent the instruction from violating the on-chain policy parameters.
 //
 // The Policy Engine is the critical safety layer that ensures the agent cannot exceed
 // limits. It is deterministic: given the same inputs (risk score, position state, policy
 // parameters), it produces the same outputs. This is essential for verifiability.
 //
 // Key Design Decisions:
-//  1. All policy constraints are enforced deterministically — no randomness or external state
-//  2. The agent cannot exceed limits: every action is validated against policy before execution
-//  3. Policy parameters match the on-chain PolicyRegistry (Section 9.4.5)
-//  4. The PolicyEngine implements the PolicyProvider interface from the RiskAgent
-//  5. Report-specified fields: maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets
-//  6. Three default policies (Conservative/Balanced/Aggressive) match the on-chain PolicyRegistry
+// 1. All policy constraints are enforced deterministically — no randomness or external state
+// 2. The agent cannot exceed limits: every action is validated against policy before execution
+// 3. Policy parameters match the on-chain PolicyRegistry
+// 4. The PolicyEngine implements the PolicyProvider interface from the RiskAgent
+// 5. Vault fields: maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets
+// 6. Three default policies (Conservative/Balanced/Aggressive) match the on-chain PolicyRegistry
 package policy
 
 import (
@@ -56,7 +56,7 @@ const (
 )
 
 // ActionType represents the type of action being validated.
-// Extended per the report's Section 9.3.3 to include all agent action types.
+// Extended per the vault specification to include all agent action types.
 type ActionType int
 
 const (
@@ -81,14 +81,14 @@ var ActionTypeNames = map[ActionType]string{
 // ─── Policy Definition ─────────────────────────────────────────────────────
 
 // Policy represents a risk policy definition.
-// Per the report's Section 9.4.5 (IPolicyRegistry):
+// 
 //
-//      struct Policy {
-//          uint256 maxDrawdownBps;        // e.g., 1500 = 15%
-//          uint256 maxSingleExposureBps;  // e.g., 4000 = 40%
-//          uint256 hedgeThresholdBps;     // e.g., 800 = 8%
-//          address[] allowedAssets;       // whitelist
-//      }
+// struct Policy {
+// uint256 maxDrawdownBps; // e.g., 1500 = 15%
+// uint256 maxSingleExposureBps; // e.g., 4000 = 40%
+// uint256 hedgeThresholdBps; // e.g., 800 = 8%
+// address[] allowedAssets; // whitelist
+// }
 //
 // Extended with additional fields for full policy enforcement.
 type Policy struct {
@@ -101,7 +101,7 @@ type Policy struct {
         CreatedAt               time.Time   `json:"createdAt"`
         UpdatedAt               time.Time   `json:"updatedAt"`
 
-        // Report-specified fields (Section 9.4.5)
+        // Vault fields
         MaxDrawdownBps          uint64      `json:"maxDrawdownBps"`          // Max drawdown in basis points (e.g., 1500 = 15%)
         MaxSingleExposureBps    uint64      `json:"maxSingleExposureBps"`    // Max single-asset exposure in bps (e.g., 4000 = 40%)
         HedgeThresholdBps       uint64      `json:"hedgeThresholdBps"`       // Risk score threshold for hedging in bps (e.g., 800 = 8%)
@@ -181,9 +181,9 @@ func DefaultPositionContext() *PositionContext {
 
 // PolicyEngine enforces deterministic policy constraints.
 //
-// Per the report's Section 9.3.3: "The Policy Engine is a deterministic rule engine
+// The Policy Engine is a deterministic rule engine
 // that maps the risk score and current positions to specific policy actions (rebalance,
-// hedge, deleverage) within the constraints set by the on-chain PolicyRegistry."
+// hedge, deleverage) within the constraints set by the on-chain PolicyRegistry.
 //
 // The PolicyEngine is the critical safety layer that ensures the agent cannot exceed
 // limits. It is deterministic: given the same inputs, it produces the same outputs.
@@ -408,27 +408,27 @@ func (pe *PolicyEngine) CheckSolvency(depositor string, collateralRatio uint64) 
         }
 }
 
-// ─── Agent Action Validation (Core of Task 12) ─────────────────────────────
+// ─── Agent Action Validation (Core of ) ─────────────────────────────
 
 // ValidateAction validates an agent action against the policy constraints.
 // This is the core method that ensures the agent cannot exceed limits.
 //
-// Per the report's Section 9.3.3: "The Policy Engine is a deterministic rule engine
-// that maps the risk score and current positions to specific policy actions."
+// The Policy Engine is a deterministic rule engine
+// that maps the risk score and current positions to specific policy actions.
 //
-// Per the report's Section 9.3.12: "If the AI agent emits an erroneous instruction,
+// If the AI agent emits an erroneous instruction,
 // the Policy Engine's deterministic constraints prevent the instruction from violating
-// the on-chain policy parameters."
+// the on-chain policy parameters.
 //
 // This method is deterministic: given the same inputs, it produces the same outputs.
 // It validates:
-//   - Policy is active and assigned
-//   - Action type is allowed by the policy
-//   - Amount does not exceed the policy's maximum for the action type
-//   - Action does not violate maxDrawdown, maxSingleExposure, or hedgeThreshold
-//   - Action does not violate maxLeverage or minCollateralRatio
-//   - If the amount exceeds the policy cap, it is capped (not blocked) for rebalance/hedge/deleverage
-//   - Emergency exit is always allowed (safety override)
+// - Policy is active and assigned
+// - Action type is allowed by the policy
+// - Amount does not exceed the policy's maximum for the action type
+// - Action does not violate maxDrawdown, maxSingleExposure, or hedgeThreshold
+// - Action does not violate maxLeverage or minCollateralRatio
+// - If the amount exceeds the policy cap, it is capped (not blocked) for rebalance/hedge/deleverage
+// - Emergency exit is always allowed (safety override)
 func (pe *PolicyEngine) ValidateAction(depositor string, actionType ActionType, amount *big.Int, ctx *PositionContext) *ActionValidationResult {
         pe.mu.Lock()
         pe.totalValidations++
@@ -504,14 +504,14 @@ func (pe *PolicyEngine) ValidateAction(depositor string, actionType ActionType, 
 
 // validateRebalance validates a rebalance action against policy constraints.
 //
-// Per the report's Section 9.3.3: The Policy Engine maps the risk score and current
+// The Policy Engine maps the risk score and current
 // positions to specific policy actions within the constraints set by the on-chain
 // PolicyRegistry. For rebalance:
-//   - Amount must not exceed MaxRebalanceAmountBps of total vault value
-//   - Current drawdown must not exceed MaxDrawdownBps
-//   - Current leverage must not exceed MaxLeverage
-//   - Collateral ratio must remain above MinCollateralRatio after rebalance
-//   - If amount exceeds policy cap, it is capped (not blocked)
+// - Amount must not exceed MaxRebalanceAmountBps of total vault value
+// - Current drawdown must not exceed MaxDrawdownBps
+// - Current leverage must not exceed MaxLeverage
+// - Collateral ratio must remain above MinCollateralRatio after rebalance
+// - If amount exceeds policy cap, it is capped (not blocked)
 func (pe *PolicyEngine) validateRebalance(policy *Policy, amount *big.Int, ctx *PositionContext, result *ActionValidationResult) *ActionValidationResult {
         // Check drawdown constraint
         if ctx.CurrentDrawdownBps > policy.MaxDrawdownBps {
@@ -572,12 +572,12 @@ func (pe *PolicyEngine) validateRebalance(policy *Policy, amount *big.Int, ctx *
 
 // validateHedge validates a hedge action against policy constraints.
 //
-// Per the report's Section 9.4.5: hedgeThresholdBps is the risk score threshold
+// hedgeThresholdBps is the risk score threshold
 // for hedging. The hedge action is only allowed if the risk score exceeds this threshold.
-//   - Risk score must exceed HedgeThresholdBps
-//   - Amount must not exceed MaxHedgeAmountBps of total vault value
-//   - Collateral ratio must remain above MinCollateralRatio
-//   - If amount exceeds policy cap, it is capped (not blocked)
+// - Risk score must exceed HedgeThresholdBps
+// - Amount must not exceed MaxHedgeAmountBps of total vault value
+// - Collateral ratio must remain above MinCollateralRatio
+// - If amount exceeds policy cap, it is capped (not blocked)
 func (pe *PolicyEngine) validateHedge(policy *Policy, amount *big.Int, ctx *PositionContext, result *ActionValidationResult) *ActionValidationResult {
         // Check hedge threshold — hedge is only allowed when risk is high enough
         riskScoreBps := uint64(ctx.RiskScore * 100) // Convert 0-100 score to bps
@@ -629,8 +629,8 @@ func (pe *PolicyEngine) validateHedge(policy *Policy, amount *big.Int, ctx *Posi
 //
 // Deleverage is a risk-reducing action and is generally allowed, but the amount
 // is constrained by the policy's MaxDeleverageAmountBps.
-//   - Amount must not exceed MaxDeleverageAmountBps of total vault value
-//   - If amount exceeds policy cap, it is capped (not blocked)
+// - Amount must not exceed MaxDeleverageAmountBps of total vault value
+// - If amount exceeds policy cap, it is capped (not blocked)
 func (pe *PolicyEngine) validateDeleverage(policy *Policy, amount *big.Int, ctx *PositionContext, result *ActionValidationResult) *ActionValidationResult {
         // Deleverage is a risk-reducing action, so it's generally allowed
         // But we still cap the amount
@@ -738,10 +738,10 @@ func (pe *PolicyEngine) computeMaxAmount(bps uint64, totalVaultValue *big.Int) *
 // LoadDefaultPolicies loads the default policies (Conservative/Balanced/Aggressive)
 // matching the on-chain PolicyRegistry contracts deployed on Coston2.
 //
-// Per the report's Section 9.4.5:
-//   - Conservative: maxDrawdown=15%, maxSingleExposure=40%, hedgeThreshold=8%
-//   - Balanced: maxDrawdown=25%, maxSingleExposure=60%, hedgeThreshold=12%
-//   - Aggressive: maxDrawdown=40%, maxSingleExposure=80%, hedgeThreshold=20%
+// 
+// - Conservative: maxDrawdown=15%, maxSingleExposure=40%, hedgeThreshold=8%
+// - Balanced: maxDrawdown=25%, maxSingleExposure=60%, hedgeThreshold=12%
+// - Aggressive: maxDrawdown=40%, maxSingleExposure=80%, hedgeThreshold=20%
 func (pe *PolicyEngine) LoadDefaultPolicies() error {
         policies := []*Policy{
                 {
@@ -750,9 +750,9 @@ func (pe *PolicyEngine) LoadDefaultPolicies() error {
                         Description:            "Low risk tolerance policy for institutional depositors",
                         RiskLevel:              RiskLevelLow,
                         IsActive:               true,
-                        MaxDrawdownBps:         1500,  // 15% max drawdown (report Section 9.4.5)
-                        MaxSingleExposureBps:   4000,  // 40% max single exposure (report Section 9.4.5)
-                        HedgeThresholdBps:      800,   // 8% hedge threshold (report Section 9.4.5)
+                        MaxDrawdownBps:         1500,  // 15% max drawdown
+                        MaxSingleExposureBps:   4000,  // 40% max single exposure
+                        HedgeThresholdBps:      800,   // 8% hedge threshold
                         AllowedAssets:          []string{"FXRP", "FLR", "sFLR"},
                         MaxDepositPerTx:        big.NewInt(100_000_000),    // 100 XRP
                         MaxWithdrawalPerTx:     big.NewInt(50_000_000),     // 50 XRP
@@ -775,9 +775,9 @@ func (pe *PolicyEngine) LoadDefaultPolicies() error {
                         Description:            "Medium risk tolerance policy for institutional depositors",
                         RiskLevel:              RiskLevelMedium,
                         IsActive:               true,
-                        MaxDrawdownBps:         2500,  // 25% max drawdown (report Section 9.4.5)
-                        MaxSingleExposureBps:   6000,  // 60% max single exposure (report Section 9.4.5)
-                        HedgeThresholdBps:      1200,  // 12% hedge threshold (report Section 9.4.5)
+                        MaxDrawdownBps:         2500,  // 25% max drawdown
+                        MaxSingleExposureBps:   6000,  // 60% max single exposure
+                        HedgeThresholdBps:      1200,  // 12% hedge threshold
                         AllowedAssets:          []string{"FXRP", "FLR", "sFLR", "BTC", "ETH"},
                         MaxDepositPerTx:        big.NewInt(500_000_000),    // 500 XRP
                         MaxWithdrawalPerTx:     big.NewInt(250_000_000),    // 250 XRP
@@ -800,9 +800,9 @@ func (pe *PolicyEngine) LoadDefaultPolicies() error {
                         Description:            "High risk tolerance policy for institutional depositors",
                         RiskLevel:              RiskLevelHigh,
                         IsActive:               true,
-                        MaxDrawdownBps:         4000,  // 40% max drawdown (report Section 9.4.5)
-                        MaxSingleExposureBps:   8000,  // 80% max single exposure (report Section 9.4.5)
-                        HedgeThresholdBps:      2000,  // 20% hedge threshold (report Section 9.4.5)
+                        MaxDrawdownBps:         4000,  // 40% max drawdown
+                        MaxSingleExposureBps:   8000,  // 80% max single exposure
+                        HedgeThresholdBps:      2000,  // 20% hedge threshold
                         AllowedAssets:          []string{"FXRP", "FLR", "sFLR", "BTC", "ETH", "HL-PERP"},
                         MaxDepositPerTx:        big.NewInt(2_000_000_000),    // 2,000 XRP
                         MaxWithdrawalPerTx:     big.NewInt(1_000_000_000),    // 1,000 XRP

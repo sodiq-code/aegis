@@ -1,31 +1,31 @@
 // Package executor implements the ActionExecutor for the Aegis vault system.
 //
-// Task 12 (Day 12): Build ActionExecutor + Policy Engine (deterministic policy enforcement)
-// Per the report's Section 9.3.3:
+// Build ActionExecutor + Policy Engine (deterministic policy enforcement)
+// 
 //
-//   Component 3 (Action Executor): the module that translates policy actions
-//   into PMW instructions and submits them via the InstructionSender.
+// Component 3 (Action Executor): the module that translates policy actions
+// into PMW instructions and submits them via the InstructionSender.
 //
-// Per the report's Section 9.4.1:
+// 
 //
-//   ActionExecutor (issues PMW instructions)
+// ActionExecutor (issues PMW instructions)
 //
-// Per the report's Section 9.4.2 (Sequence diagram — risk rebalance flow):
+// 
 //
-//   RiskAgent → propose action (move FXRP to XRPL) → InstructionSender
-//   → policy check (on-chain) → instruction → PMW → sign & submit → XRPL
+// RiskAgent → propose action (move FXRP to XRPL) → InstructionSender
+// → policy check (on-chain) → instruction → PMW → sign & submit → XRPL
 //
 // The ActionExecutor is the execution layer that translates validated policy
 // actions into PMW instructions. It enforces policy constraints BEFORE executing
 // any action, ensuring the agent cannot exceed limits.
 //
 // Key Design Decisions:
-//  1. All actions are validated against the PolicyEngine before execution
-//  2. The ActionExecutor implements the PMWExecutor interface from the RiskAgent
-//  3. Amounts are capped to policy limits (not blocked) for rebalance/hedge/deleverage
-//  4. Emergency exit is always allowed (safety override)
-//  5. All actions are tracked in a history for auditability
-//  6. The ActionExecutor is deterministic given the same inputs
+// 1. All actions are validated against the PolicyEngine before execution
+// 2. The ActionExecutor implements the PMWExecutor interface from the RiskAgent
+// 3. Amounts are capped to policy limits (not blocked) for rebalance/hedge/deleverage
+// 4. Emergency exit is always allowed (safety override)
+// 5. All actions are tracked in a history for auditability
+// 6. The ActionExecutor is deterministic given the same inputs
 package executor
 
 import (
@@ -152,10 +152,10 @@ type PolicyChecker interface {
 // ActionExecutor handles PMW-mediated cross-chain execution with deterministic
 // policy enforcement.
 //
-// Per the report's Section 9.3.3: "The Action Executor translates policy actions
-// into PMW instructions and submits them via the InstructionSender."
+// The Action Executor translates policy actions
+// into PMW instructions and submits them via the InstructionSender.
 //
-// Task 14 (Day 14): PMW integration — wire ActionExecutor to PMW for XRPL execution.
+// PMW integration — wire ActionExecutor to PMW for XRPL execution.
 // The ActionExecutor now uses the real PMWClient for XRPL execution on Coston2.
 // When the PMWClient is connected, actions are submitted as real on-chain transactions
 // to the FCC Diamond. When not connected, a mock fallback is used for testing.
@@ -170,13 +170,13 @@ type ActionExecutor struct {
         projects map[string]*WalletProject
         wallets  map[string]*PMWWallet
 
-        // Task 14: Real PMW client for Coston2 XRPL execution
+        // Real PMW client for Coston2 XRPL execution
         pmwClient *pmw.PMWClient
 
-        // Task 14: InstructionSender address for on-chain submission
+        // InstructionSender address for on-chain submission
         instructionSenderAddr string
 
-        // Task 14: Whether PMW is connected to Coston2
+        // Whether PMW is connected to Coston2
         pmwConnected bool
 
         // Instruction tracking
@@ -219,10 +219,10 @@ func (ae *ActionExecutor) SetDefaultDepositor(depositor string) {
         ae.defaultDepositor = depositor
 }
 
-// ─── Task 14: PMW Client Integration ────────────────────────────────────────
+// ─── PMW Client Integration ────────────────────────────────────────
 
 // SetPMWClient sets the real PMW client for Coston2 XRPL execution.
-// Per Task 14: "PMW integration: wire ActionExecutor to PMW for XRPL execution."
+// PMW integration: wire ActionExecutor to PMW for XRPL execution.
 //
 // When the PMWClient is connected, the ActionExecutor submits real on-chain
 // transactions to the FCC Diamond for XRPL execution. When not connected,
@@ -275,9 +275,9 @@ func (ae *ActionExecutor) ConnectPMW() error {
 // InitializePMW sets up the PMW system for XRPL execution.
 // This creates a wallet project and a wallet on the FCC Diamond.
 //
-// Per the report's Section 9.4.2:
+// 
 //
-//      PMW Layer controls wallets on XRPL (settle FXRP, issue payments)
+// PMW Layer controls wallets on XRPL (settle FXRP, issue payments)
 func (ae *ActionExecutor) InitializePMW(extensionID uint64) error {
         ae.mu.RLock()
         client := ae.pmwClient
@@ -330,9 +330,9 @@ func (ae *ActionExecutor) InitializePMW(extensionID uint64) error {
 // executeWithPMW executes an action via the real PMW system on Coston2.
 // This is the real implementation that replaces the mock execution.
 //
-// Per the report's Section 9.4.2:
+// 
 //
-//      RiskAgent → propose action → InstructionSender → policy check → PMW → XRPL
+// RiskAgent → propose action → InstructionSender → policy check → PMW → XRPL
 func (ae *ActionExecutor) executeWithPMW(actionType policy.ActionType, amount *big.Int, destination string, actionName string) (*PMWResult, error) {
         ae.mu.RLock()
         client := ae.pmwClient
@@ -413,8 +413,8 @@ func (ae *ActionExecutor) executeWithPMW(actionType policy.ActionType, amount *b
 // ─── PMWExecutor Interface Implementation ───────────────────────────────────
 
 // ExecuteRebalance executes a rebalance action with policy enforcement.
-// Per the report's Section 9.3.3: "The Action Executor translates policy actions
-// into PMW instructions and submits them via the InstructionSender."
+// The Action Executor translates policy actions
+// into PMW instructions and submits them via the InstructionSender.
 //
 // The rebalance amount is validated against the policy before execution.
 // If the amount exceeds the policy cap, it is capped (not blocked).
@@ -437,9 +437,9 @@ func (ae *ActionExecutor) ExecuteDeleverage(amount *big.Int) (*PMWResult, error)
 }
 
 // ExecuteEmergencyExit executes an emergency exit — always allowed.
-// Per the report's Section 9.3.12: "If the TEE fails or becomes unavailable,
+// If the TEE fails or becomes unavailable,
 // the vault enters a safe state... the user can withdraw their deposited assets
-// via an emergency exit path that does not depend on the TEE."
+// via an emergency exit path that does not depend on the TEE.
 func (ae *ActionExecutor) ExecuteEmergencyExit() (*PMWResult, error) {
         ae.mu.Lock()
         ae.totalExecutions++
@@ -470,9 +470,9 @@ func (ae *ActionExecutor) IsAvailable() bool {
 // executeWithPolicy is the core method that validates an action against policy
 // before executing it. This is the critical safety layer.
 //
-// Per the report's Section 9.3.12: "If the AI agent emits an erroneous
+// If the AI agent emits an erroneous
 // instruction, the Policy Engine's deterministic constraints prevent the
-// instruction from violating the on-chain policy parameters."
+// instruction from violating the on-chain policy parameters.
 func (ae *ActionExecutor) executeWithPolicy(actionType policy.ActionType, amount *big.Int, destination string, actionName string) (*PMWResult, error) {
         ae.mu.Lock()
         ae.totalExecutions++
@@ -512,9 +512,9 @@ func (ae *ActionExecutor) executeWithPolicy(actionType policy.ActionType, amount
         // Execute the instruction
         instruction := ae.createInstruction(policyActionToInstruction(actionType), amount, destination)
 
-        // Task 14: Use real PMW client when connected to Coston2
-        // Per the report's Section 9.4.2: "RiskAgent → propose action → InstructionSender
-        // → policy check → PMW → sign & submit → XRPL"
+        // Use real PMW client when connected to Coston2
+        // RiskAgent → propose action → InstructionSender
+        // → policy check → PMW → sign & submit → XRPL
         var result *PMWResult
 
         ae.mu.RLock()

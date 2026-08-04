@@ -3,11 +3,11 @@ pragma solidity ^0.8.27;
 
 /// @title IPolicyRegistry
 /// @notice Registry for risk policies that govern Aegis vault operations.
-///         API matches the Aegis blueprint (Section 9.4.5) exactly:
-///         maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets.
+/// API matches the Aegis blueprint exactly:
+/// maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets.
 /// @dev Policies are created by vault operators and can be assigned to specific
-///      depositors. The PolicyEngine in the FCC extension reads these policies
-///      and enforces them deterministically within TEE.
+/// depositors. The PolicyEngine in the FCC extension reads these policies
+/// and enforces them deterministically within TEE.
 interface IPolicyRegistry {
     // --- Enums ---
 
@@ -29,7 +29,7 @@ interface IPolicyRegistry {
 
     // --- Structs ---
 
-    /// @notice A risk policy definition — matches the report's Section 9.4.5 spec
+    /// @notice A risk policy definition — matches the vault specification
     struct Policy {
         uint256 policyId;               // Unique policy identifier
         address owner;                  // Policy owner (vault operator)
@@ -39,7 +39,7 @@ interface IPolicyRegistry {
         bool isActive;                  // Whether the policy is active
         uint256 createdAt;              // Creation timestamp
         uint256 updatedAt;              // Last update timestamp
-        // --- Report-specified fields (Section 9.4.5) ---
+        // --- Vault fields ---
         uint256 maxDrawdownBps;         // Maximum drawdown allowed (basis points, e.g., 1500 = 15%)
         uint256 maxSingleExposureBps;   // Maximum single-asset exposure (basis points, e.g., 4000 = 40%)
         uint256 hedgeThresholdBps;      // Hedge trigger threshold (basis points, e.g., 800 = 8%)
@@ -86,7 +86,7 @@ interface IPolicyRegistry {
         address indexed depositor
     );
 
-    // --- Report-Specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @notice Set a policy's parameters
     /// @param policyId The policy to set

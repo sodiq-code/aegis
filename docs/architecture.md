@@ -22,7 +22,7 @@ This layer is responsible for getting XRP from the XRP Ledger onto Flare in a tr
 
 This layer contains the Solidity smart contracts deployed on Flare's C-Chain that govern vault operations, risk policies, and solvency proofs. All contracts are written in Solidity 0.8.27, tested with Foundry (143 tests including fuzz tests), and deployed on Coston2 testnet.
 
-- **VaultCore**: The primary entry point for depositors. Holds deposited FXRP/sFLR, enforces deposit/withdrawal rules, tracks vault state (total deposits, valuations, position count), reads XRP/USD price from FTSO V2, and manages emergency mode. The contract implements the exact API specified in the report's Section 9.4.5: `depositFXRP(amount, policyId)`, `withdraw(amount)`, `emergencyExit()`. Also provides extended API: `getXrpUsdPrice()`, `getTotalValuation()`, `getPosition()`, `revalueAllPositions()`.
+- **VaultCore**: The primary entry point for depositors. Holds deposited FXRP/sFLR, enforces deposit/withdrawal rules, tracks vault state (total deposits, valuations, position count), reads XRP/USD price from FTSO V2, and manages emergency mode. The contract implements the vault API: `depositFXRP(amount, policyId)`, `withdraw(amount)`, `emergencyExit()`. Also provides extended API: `getXrpUsdPrice()`, `getTotalValuation()`, `getPosition()`, `revalueAllPositions()`.
 - **PolicyRegistry**: Stores risk policy parameters for each vault. Policies define the constraints within which the AI risk agent must operate: maximum drawdown (basis points), maximum single-asset exposure, hedge thresholds, allowed asset list, deposit/withdrawal limits per transaction, minimum collateral ratio, maximum leverage, rebalance thresholds, and the actions to take on risk breach or solvency warning. Three default policies are provided: Conservative (15% drawdown, 40% exposure), Balanced (25% drawdown, 60% exposure), and Aggressive (40% drawdown, 80% exposure). Also provides `checkAction()` for policy-aware action validation and `validateDeposit()`/`validateWithdrawal()` for transaction-level checks.
 - **SolvencyRoot**: Receives the Merkle root of solvency computed inside the TEE and makes it verifiable on-chain. Stores the current proof and proof history. Provides `isSolvent()` (returns bool + collateral ratio), `getCurrentSolvencyProof()` (returns full proof struct), `verifyPosition()` for individual position inclusion, and emits `SolvencyProofPublished` events for audit trail. The minimum collateral ratio threshold is configurable (currently 150%).
 - **InstructionSender**: Sends instructions to the FCC extension via the TeeExtensionRegistry contract. Handles deposit attestation requests, rebalance instructions, solvency computation requests, and payment/redeem/settle operations. Each instruction has a typed lifecycle: PENDING -> SUBMITTED -> CONFIRMED or FAILED or CANCELLED, with instruction types including PAYMENT, REDEEM, REBALANCE, EMERGENCY_TRANSFER, and SETTLE_LIABILITY.
@@ -91,21 +91,21 @@ The system is fully deployed on Coston2 with 7 Aegis contracts and 8 Flare syste
 ### Deposit Flow (end-to-end)
 
 ```
-XRPL Wallet          Flare Smart Accounts     FAssets       VaultCore        FCC Extension       SolvencyRoot
-    |                       |                    |              |                  |                  |
-    |  1. Sign XRPL tx      |                    |              |                  |                  |
-    |---------------------->|                    |              |                  |                  |
-    |                       |  2. Mint FXRP      |              |                  |                  |
-    |                       |------------------->|              |                  |                  |
-    |                       |                    |  3. Deposit  |                  |                  |
-    |                       |                    |------------->|                  |                  |
-    |                       |                    |              |  4. FDC attest   |                  |
-    |                       |                    |              |----------------->|                  |
-    |                       |                    |              |                  |  5. Compute root |
-    |                       |                    |              |                  |----------------->|
-    |                       |                    |              |                  |                  |
-    |                       |                    |              |  VaultCore event |  Merkle root     |
-    |                       |                    |              |  DepositMade     |  published       |
+XRPL Wallet Flare Smart Accounts FAssets VaultCore FCC Extension SolvencyRoot
+    | | | | | |
+    | 1. Sign XRPL tx | | | | |
+    |---------------------->| | | | |
+    | | 2. Mint FXRP | | | |
+    | |------------------->| | | |
+    | | | 3. Deposit | | |
+    | | |------------->| | |
+    | | | | 4. FDC attest | |
+    | | | |----------------->| |
+    | | | | | 5. Compute root |
+    | | | | |----------------->|
+    | | | | | |
+    | | | | VaultCore event | Merkle root |
+    | | | | DepositMade | published |
 ```
 
 1. **XRPL Wallet** signs a single XRPL transaction (via Xaman or other wallet)
@@ -117,29 +117,29 @@ XRPL Wallet          Flare Smart Accounts     FAssets       VaultCore        FCC
 ### Rebalance Flow (autonomous risk management)
 
 ```
-FTSO V2          RiskAgent (TEE)      Policy Engine       ActionExecutor       PMW              FDC            SolvencyRoot
-   |                    |                    |                   |                |                |                |
-   |  1. Price update   |                    |                   |                |                |                |
-   |------------------->|                    |                   |                |                |                |
-   |                    |  2. Score (XGBoost)|                   |                |                |                |
-   |                    |  risk=72, action=  |                   |                |                |                |
-   |                    |  "Hedge"           |                   |                |                |                |
-   |                    |                    |  3. Validate      |                |                |                |
-   |                    |                    |  against policy   |                |                |                |
-   |                    |                    |  OK Approved      |                |                |                |
-   |                    |                    |------------------->|                |                |                |
-   |                    |                    |                   |  4. Route to   |                |                |
-   |                    |                    |                   |  PMW           |                |                |
-   |                    |                    |                   |--------------->|                |                |
-   |                    |                    |                   |                |  5. Execute    |                |
-   |                    |                    |                   |                |  on XRPL       |                |
-   |                    |                    |                   |                |                |  6. Attest    |
-   |                    |                    |                   |                |                |  payment      |
-   |                    |                    |                   |                |--------------->|                |
-   |                    |                    |                   |                |                |                |
-   |                    |  7. Update state   |                   |                |                |                |
-   |                    |  + publish root    |                   |                |                |                |
-   |                    |-------------------------------------------------------------------------->|
+FTSO V2 RiskAgent (TEE) Policy Engine ActionExecutor PMW FDC SolvencyRoot
+   | | | | | | |
+   | 1. Price update | | | | | |
+   |------------------->| | | | | |
+   | | 2. Score (XGBoost)| | | | |
+   | | risk=72, action= | | | | |
+   | | "Hedge" | | | | |
+   | | | 3. Validate | | | |
+   | | | against policy | | | |
+   | | | OK Approved | | | |
+   | | |------------------->| | | |
+   | | | | 4. Route to | | |
+   | | | | PMW | | |
+   | | | |--------------->| | |
+   | | | | | 5. Execute | |
+   | | | | | on XRPL | |
+   | | | | | | 6. Attest |
+   | | | | | | payment |
+   | | | | |--------------->| |
+   | | | | | | |
+   | | 7. Update state | | | | |
+   | | + publish root | | | | |
+   | |-------------------------------------------------------------------------->|
 ```
 
 1. **FTSO V2** delivers a new XRP/USD price (every ~90 seconds)
@@ -153,32 +153,32 @@ FTSO V2          RiskAgent (TEE)      Policy Engine       ActionExecutor       P
 ### Audit Flow (solvency verification)
 
 ```
-Auditor          AuditClient         SolvencyRoot          FDC Verification       TEE
-   |                  |                    |                      |                  |
-   |  1. Request      |                    |                      |                  |
-   |  attestation     |                    |                      |                  |
-   |----------------->|                    |                      |                  |
-   |                  |  2. Read proof     |                      |                  |
-   |                  |------------------->|                      |                  |
-   |                  |  proof returned   |                      |                  |
-   |                  |<-------------------|                      |                  |
-   |                  |                    |                      |                  |
-   |                  |  3. Verify merkle  |                      |                  |
-   |                  |  root on-chain     |                      |                  |
-   |                  |------------------->|                      |                  |
-   |                  |  OK Root matches   |                      |                  |
-   |                  |<-------------------|                      |                  |
-   |                  |                    |                      |                  |
-   |                  |  4. Check FDC      |                      |                  |
-   |                  |  merkle root       |                      |                  |
-   |                  |----------------------------------------->|                  |
-   |                  |  OK FDC confirms   |                      |                  |
-   |                  |<-----------------------------------------|                  |
-   |                  |                    |                      |                  |
-   |  5. Verified     |                    |                      |                  |
-   |  (no positions   |                    |                      |                  |
-   |   revealed)      |                    |                      |                  |
-   |<-----------------|                    |                      |                  |
+Auditor AuditClient SolvencyRoot FDC Verification TEE
+   | | | | |
+   | 1. Request | | | |
+   | attestation | | | |
+   |----------------->| | | |
+   | | 2. Read proof | | |
+   | |------------------->| | |
+   | | proof returned | | |
+   | |<-------------------| | |
+   | | | | |
+   | | 3. Verify merkle | | |
+   | | root on-chain | | |
+   | |------------------->| | |
+   | | OK Root matches | | |
+   | |<-------------------| | |
+   | | | | |
+   | | 4. Check FDC | | |
+   | | merkle root | | |
+   | |----------------------------------------->| |
+   | | OK FDC confirms | | |
+   | |<-----------------------------------------| |
+   | | | | |
+   | 5. Verified | | | |
+   | (no positions | | | |
+   | revealed) | | | |
+   |<-----------------| | | |
 ```
 
 1. **Auditor** requests a solvency attestation (via the SDK or dashboard)

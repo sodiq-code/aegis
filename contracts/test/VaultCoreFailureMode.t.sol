@@ -9,11 +9,11 @@ import "../src/SolvencyRoot.sol";
 import "../src/InstructionSender.sol";
 
 /// @title VaultCoreFailureModeTest
-/// @notice Task 17 (Day 17): Failure-mode tests for the vault contracts.
-///         Acceptance criterion: Failure-mode tests pass (TEE down, PMW failure, FDC delay).
-///         Per the report's Section 9.5.5:
-///         "Failure-mode tests: TEE unavailable, PMW consensus failure, FDC attestation delay
-///          — verify the vault enters safe state."
+/// @notice Failure-mode tests for the vault contracts.
+/// Acceptance criterion: Failure-mode tests pass (TEE down, PMW failure, FDC delay).
+/// 
+/// "Failure-mode tests: TEE unavailable, PMW consensus failure, FDC attestation delay
+/// verify the vault enters safe state.
 contract VaultCoreFailureModeTest is Test {
     // --- Contracts ---
     VerifierRole public verifierRole;
@@ -110,7 +110,7 @@ contract VaultCoreFailureModeTest is Test {
     // ==========================================
 
     /// @notice Test emergency exit is always available
-    /// Per the report: "emergency exit path that does not depend on the TEE"
+    /// emergency exit path that does not depend on the TEE
     function test_EmergencyExit_AlwaysAvailable() public {
         // Emergency exit should be available regardless of vault state
         // This is a fundamental design principle
@@ -118,21 +118,21 @@ contract VaultCoreFailureModeTest is Test {
     }
 
     /// @notice Test that withdrawals are allowed in safe state
-    /// Per the report: "the user can withdraw their deposited assets"
+    /// the user can withdraw their deposited assets
     function test_Withdrawals_AllowedInSafeState() public {
         // Withdrawals should be allowed even when vault is in safe state
         assertTrue(true);
     }
 
     /// @notice Test that deposits are blocked in safe state
-    /// Per the report: "no new positions are taken"
+    /// no new positions are taken
     function test_Deposits_BlockedInSafeState() public {
         // Deposits should be blocked when vault is in safe state
         assertTrue(true);
     }
 
     /// @notice Test that rebalances are blocked in safe state
-    /// Per the report: "no rebalances occur"
+    /// no rebalances occur
     function test_Rebalances_BlockedInSafeState() public {
         // Rebalances should be blocked when vault is in safe state
         assertTrue(true);
@@ -359,7 +359,7 @@ contract VaultCoreFailureModeTest is Test {
     }
 
     /// @notice Test that the system fails safe, not fast
-    /// Per the report: "The system is designed to fail safe rather than fail fast."
+    /// The system is designed to fail safe rather than fail fast.
     function test_SystemFailsSafe() public {
         // Even when things fail, the system should be in a safe state
         // 1. Solvency proof invalidation is safe

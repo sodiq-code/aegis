@@ -394,7 +394,7 @@ func TestPolicyEngine_MarshalJSON(t *testing.T) {
         }
 }
 
-// ─── Task 12: ValidateAction Tests ──────────────────────────────────────────
+// ─── ValidateAction Tests ──────────────────────────────────────────
 
 func TestPolicyEngine_ValidateAction_Rebalance_Valid(t *testing.T) {
         pe := newTestPolicyEngine()
@@ -877,7 +877,7 @@ func TestPolicyEngine_DefaultPolicies_ReportSpecFields(t *testing.T) {
         pe := NewPolicyEngine()
         pe.LoadDefaultPolicies()
 
-        // Verify report-specified fields (Section 9.4.5)
+        // Verify vault fields
         conservative, _ := pe.GetPolicy(1)
         if conservative.MaxDrawdownBps != 1500 {
                 t.Errorf("Conservative maxDrawdownBps: expected 1500, got %d", conservative.MaxDrawdownBps)

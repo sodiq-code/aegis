@@ -36,7 +36,7 @@ func (s Status) String() string {
 
 // CheckResult captures the outcome of a single verification check.
 type CheckResult struct {
-	Step    string // "deploy", "register", "services", "tee-version", "tee-machine", "test"
+	Step    string // "deploy", "register", "services", "tee-version", "tee-machine", "test
 	ID      string // "D1", "D2", etc.
 	Name    string // human-readable check name
 	Status  Status
@@ -145,7 +145,7 @@ func (r *Report) Fprint(w io.Writer) {
 				continue
 			}
 			color := statusColor(res.Status)
-			fmt.Fprintf(w, "  %s[%s]%s %s  %s\n", color, res.Status, colorReset, res.ID, res.Name)
+			fmt.Fprintf(w, "  %s[%s]%s %s %s\n", color, res.Status, colorReset, res.ID, res.Name)
 
 			if res.Status == FAIL || res.Status == WARN {
 				if res.Message != "" {

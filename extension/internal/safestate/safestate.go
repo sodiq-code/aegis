@@ -1,43 +1,43 @@
 // Package safestate implements the safe-state logic and error handling for the Aegis vault system.
 //
-// Task 17 (Day 17): Error handling, safe-state logic, emergency exit.
+// Error handling, safe-state logic, emergency exit.
 // Acceptance criterion: Failure-mode tests pass (TEE down, PMW failure, FDC delay).
 //
-// Per the report's Section 9.3.12 (Disaster recovery and business continuity):
+// 
 //
-//   "If the TEE fails or becomes unavailable, the vault enters a safe state:
-//    no new positions are taken, no rebalances occur, and the user can withdraw
-//    their deposited assets via an emergency exit path that does not depend on the TEE.
-//    If the AI agent emits an erroneous instruction, the Policy Engine's deterministic
-//    constraints prevent the instruction from violating the on-chain policy parameters.
-//    If PMW is unavailable, cross-chain execution pauses but on-chain Flare operations
-//    continue. The system is designed to fail safe rather than fail fast."
+// "If the TEE fails or becomes unavailable, the vault enters a safe state:
+// no new positions are taken, no rebalances occur, and the user can withdraw
+// their deposited assets via an emergency exit path that does not depend on the TEE.
+// If the AI agent emits an erroneous instruction, the Policy Engine's deterministic
+// constraints prevent the instruction from violating the on-chain policy parameters.
+// If PMW is unavailable, cross-chain execution pauses but on-chain Flare operations
+// continue. The system is designed to fail safe rather than fail fast.
 //
-// Per the report's Section 9.5.5 (Testing strategy):
+// 
 //
-//   "Failure-mode tests: TEE unavailable, PMW consensus failure, FDC attestation delay
-//    — verify the vault enters safe state."
+// "Failure-mode tests: TEE unavailable, PMW consensus failure, FDC attestation delay
+// verify the vault enters safe state.
 //
-// Per the report's Section 9.5.7 (Reliability, fault tolerance, performance):
+// 
 //
-//   "Fault tolerance: the vault fails safe (no new positions) if the TEE is unavailable;
-//    users can always exit via emergencyExit."
+// "Fault tolerance: the vault fails safe (no new positions) if the TEE is unavailable;
+// users can always exit via emergencyExit.
 //
 // The SafeStateManager tracks the health of each subsystem and transitions the vault
 // into a safe state when any critical subsystem fails. The safe state is defined as:
-//   1. No new deposits accepted
-//   2. No new positions taken
-//   3. No rebalances executed
-//   4. Withdrawals still allowed (including emergency exit)
-//   5. Solvency attestation continues if possible (read-only)
+// 1. No new deposits accepted
+// 2. No new positions taken
+// 3. No rebalances executed
+// 4. Withdrawals still allowed (including emergency exit)
+// 5. Solvency attestation continues if possible (read-only)
 //
 // Key Design Decisions:
-//   1. The safe state is entered automatically when any critical subsystem fails
-//   2. The safe state is exited only when ALL critical subsystems are healthy
-//   3. Emergency exit is always available regardless of safe state
-//   4. Circuit breaker pattern: consecutive failures trigger safe state
-//   5. Retry with exponential backoff for transient failures
-//   6. Error classification: transient vs. permanent vs. critical
+// 1. The safe state is entered automatically when any critical subsystem fails
+// 2. The safe state is exited only when ALL critical subsystems are healthy
+// 3. Emergency exit is always available regardless of safe state
+// 4. Circuit breaker pattern: consecutive failures trigger safe state
+// 5. Retry with exponential backoff for transient failures
+// 6. Error classification: transient vs. permanent vs. critical
 package safestate
 
 import (
@@ -284,7 +284,7 @@ func (sm *SafeStateManager) CanRebalance() bool {
 }
 
 // CanWithdraw returns whether withdrawals are allowed.
-// Per the report: "users can always exit via emergencyExit"
+// users can always exit via emergencyExit
 func (sm *SafeStateManager) CanWithdraw() bool {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -293,7 +293,7 @@ func (sm *SafeStateManager) CanWithdraw() bool {
 }
 
 // CanEmergencyExit returns whether emergency exits are allowed.
-// Per the report: "emergency exit path that does not depend on the TEE"
+// emergency exit path that does not depend on the TEE
 func (sm *SafeStateManager) CanEmergencyExit() bool {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()

@@ -84,9 +84,9 @@ contract MockFtsoV2 {
 }
 
 /// @title VaultCoreEdgeCases
-/// @notice Task 29 hardening: edge-case and fuzz tests for VaultCore's
-///         safe-state, circuit breaker, emergency mode, and access control.
-///         Uses mocks for FlareContractRegistry, AssetManager, FXRP, FtsoV2.
+/// @notice hardening: edge-case and fuzz tests for VaultCore's
+/// safe-state, circuit breaker, emergency mode, and access control.
+/// Uses mocks for FlareContractRegistry, AssetManager, FXRP, FtsoV2.
 contract VaultCoreEdgeCases is Test {
     VerifierRole public verifierRole;
     PolicyRegistry public policyRegistry;

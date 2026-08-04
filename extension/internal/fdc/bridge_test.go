@@ -1,15 +1,15 @@
 // Package fdc implements the FDC (Flare Data Connector) client for the Aegis vault system.
 //
-// Task 15 (Day 15): FDC integration: attestation of XRPL payment + Hyperliquid state.
+// FDC integration: attestation of XRPL payment + Hyperliquid state.
 // Acceptance criterion: External state attested and fed back to PositionComputer.
 //
 // These tests verify:
-//   1. FDCClient can request XRPPayment attestations
-//   2. FDCClient can request Hyperliquid state attestations
-//   3. FDCPositionBridge converts attested data to PositionComputer format
-//   4. FDCPositionBridge feeds attested data to PositionComputer
-//   5. PositionComputer correctly incorporates external state
-//   6. End-to-end flow: FDC attestation → PositionComputer state update
+// 1. FDCClient can request XRPPayment attestations
+// 2. FDCClient can request Hyperliquid state attestations
+// 3. FDCPositionBridge converts attested data to PositionComputer format
+// 4. FDCPositionBridge feeds attested data to PositionComputer
+// 5. PositionComputer correctly incorporates external state
+// 6. End-to-end flow: FDC attestation → PositionComputer state update
 package fdc
 
 import (
@@ -308,11 +308,11 @@ func TestBridgeFeedMultipleExternalStates(t *testing.T) {
 // ─── End-to-End Integration Test ─────────────────────────────────────────────
 
 func TestEndToEnd_FDCAttestationToPositionComputer(t *testing.T) {
-        // This test simulates the complete Task 15 flow:
+        // This test simulates the complete flow:
         // FDC attestation of XRPL payment + Hyperliquid state → PositionComputer
         //
-        // Per the report's Section 9.4.3:
-        //   Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)
+        // 
+        // Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)
 
         // Step 1: Set up PositionComputer
         pcConfig := position.DefaultPositionComputerConfig()
@@ -397,7 +397,7 @@ func TestEndToEnd_FDCAttestationToPositionComputer(t *testing.T) {
         }
 
         // Step 8: Verify the acceptance criterion
-        // "External state attested and fed back to PositionComputer"
+        // "External state attested and fed back to PositionComputer
         xrplExt := vaultState.ExternalState[position.ExternalChainXRPL]
         hlExt := vaultState.ExternalState[position.ExternalChainHyperliquid]
 
@@ -414,7 +414,7 @@ func TestEndToEnd_FDCAttestationToPositionComputer(t *testing.T) {
                 t.Error("Hyperliquid external state should have a valid voting round")
         }
 
-        t.Logf("✓ Task 15 acceptance criterion MET: External state attested and fed back to PositionComputer")
+        t.Logf("✓ Acceptance criterion MET: External state attested and fed back to PositionComputer")
         t.Logf("  XRPL: chain=%s, balance=%d, verified=%v, round=%d",
                 xrplExt.Chain, xrplExt.Balance, xrplExt.IsVerified, xrplExt.VotingRound)
         t.Logf("  Hyperliquid: chain=%s, balance=%d, verified=%v, round=%d",
@@ -817,10 +817,10 @@ func TestHyperliquidAPIReachable(t *testing.T) {
 
 // ─── Print Summary ───────────────────────────────────────────────────────────
 
-func TestTask15Summary(t *testing.T) {
+func TestFDCIntegrationSummary(t *testing.T) {
         summary := `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TASK 15 (Day 15): FDC Integration — XRPL Payment + Hyperliquid State Attestation
+FDC Integration — XRPL Payment + Hyperliquid State Attestation
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Acceptance Criterion: External state attested and fed back to PositionComputer

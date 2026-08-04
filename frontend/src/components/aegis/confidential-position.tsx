@@ -3,8 +3,6 @@
  *
  * Shows the contrast between on-chain state (minimal: deposit + Merkle root)
  * and the full position computed inside the TEE (what we hold, where, what we owe).
- *
- * Demo Script (1:15–2:30): "The full position — what we hold, where, and what we owe —
  * is computed inside this TEE. Anyone can verify the TEE ran the correct code;
  * no one can see the positions inside it."
  */

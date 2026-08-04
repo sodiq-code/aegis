@@ -8,9 +8,9 @@ import "../src/interfaces/vault/ISolvencyRoot.sol";
 import "../src/interfaces/vault/IVerifierRole.sol";
 
 /// @title SolvencyRootHardening
-/// @notice Task 29 hardening: edge-case and fuzz tests for SolvencyRoot.
-///         Covers Merkle proof edge cases, solvency transitions,
-///         proof invalidation, concurrent proofs, and boundary conditions.
+/// @notice hardening: edge-case and fuzz tests for SolvencyRoot.
+/// Covers Merkle proof edge cases, solvency transitions,
+/// proof invalidation, concurrent proofs, and boundary conditions.
 contract SolvencyRootHardening is Test {
     VerifierRole public verifierRole;
     SolvencyRoot public solvencyRoot;

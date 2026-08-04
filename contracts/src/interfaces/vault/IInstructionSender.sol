@@ -3,10 +3,10 @@ pragma solidity ^0.8.27;
 
 /// @title IInstructionSender
 /// @notice Sends cross-chain instructions to the XRPL via Flare PMW.
-///         API matches the Aegis blueprint (Section 9.4.5) exactly:
-///         sendInstruction(payload), getResponse(instructionId).
+/// API matches the Aegis blueprint exactly:
+/// sendInstruction(payload), getResponse(instructionId).
 /// @dev Instructions are signed by the FCC extension's ActionExecutor within the TEE,
-///      and then submitted to the PMW diamond for execution on the XRPL.
+/// and then submitted to the PMW diamond for execution on the XRPL.
 interface IInstructionSender {
     // --- Enums ---
 
@@ -79,7 +79,7 @@ interface IInstructionSender {
         string reason
     );
 
-    // --- Report-Specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @notice Send an instruction to the FCC extension (vault -> TEE)
     /// @param payload The instruction payload (ABI-encoded)

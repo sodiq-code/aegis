@@ -1,15 +1,15 @@
 // Package pmw implements the PMW (Protocol Managed Wallets) client for the Aegis vault system.
 //
-// Task 14 (Day 14): PMW integration: wire ActionExecutor to PMW for XRPL execution.
+// PMW integration: wire ActionExecutor to PMW for XRPL execution.
 // Acceptance criterion: Agent triggers real PMW XRPL transaction on policy breach.
 //
 // Tests verify:
-//  1. PMWClient creation and configuration
-//  2. System capabilities query on Coston2
-//  3. Wallet project creation on FCC Diamond
-//  4. Wallet creation and management
-//  5. XRPL instruction submission
-//  6. Full PMW integration flow
+// 1. PMWClient creation and configuration
+// 2. System capabilities query on Coston2
+// 3. Wallet project creation on FCC Diamond
+// 4. Wallet creation and management
+// 5. XRPL instruction submission
+// 6. Full PMW integration flow
 package pmw
 
 import (
@@ -336,8 +336,8 @@ func TestFullPMWIntegrationFlow(t *testing.T) {
         // 4. Create a wallet
         // 5. Submit an XRPL instruction
         //
-        // Per Task 14 acceptance criterion:
-        //   "Agent triggers real PMW XRPL transaction on policy breach"
+        // Per acceptance criterion:
+        // "Agent triggers real PMW XRPL transaction on policy breach
 
         config := DefaultPMWClientConfig()
         config.PrivateKey = "0xb3e509a0949e4d4ae489025a95eae959df178188f2c6ca130eceb2ef4ac70951"
@@ -421,9 +421,9 @@ func TestFullPMWIntegrationFlow(t *testing.T) {
 // TestPMWClientActionExecutorIntegration verifies that the PMWClient can be used
 // by the ActionExecutor to trigger real PMW XRPL transactions.
 //
-// Per the report's Section 9.4.2:
+// 
 //
-//      RiskAgent → propose action → InstructionSender → policy check → PMW → XRPL
+// RiskAgent → propose action → InstructionSender → policy check → PMW → XRPL
 func TestPMWClientActionExecutorIntegration(t *testing.T) {
         config := DefaultPMWClientConfig()
         config.PrivateKey = "0xb3e509a0949e4d4ae489025a95eae959df178188f2c6ca130eceb2ef4ac70951"

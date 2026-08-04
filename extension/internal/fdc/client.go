@@ -1,29 +1,29 @@
 // Package fdc implements the FDC (Flare Data Connector) client for the Aegis vault system.
 //
-// Task 15 (Day 15): FDC integration: attestation of XRPL payment + Hyperliquid state.
-// Per the report's Section 9.4.1:
+// FDC integration: attestation of XRPL payment + Hyperliquid state.
+// 
 //
-//   FDC Attestations -- verifies external state:
-//     XRPPayment (XRPL transfers settled)
-//     EVMTransaction (Base OFT confirmed)
-//     AddressValidity (counterparty KYC)
+// FDC Attestations -- verifies external state:
+// XRPPayment (XRPL transfers settled)
+// EVMTransaction (Base OFT confirmed)
+// AddressValidity (counterparty KYC)
 //
-// Per the report's Section 9.4.3 (Data flow diagram):
+// 
 //
-//   Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)
+// Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)
 //
-// Per the report's Section 9.4.8 (Inference pipeline):
+// 
 //
-//   The PositionComputer rebuilds the current vault state from on-chain events
-//   and FDC attestations. FDC attestation under 3 minutes.
+// The PositionComputer rebuilds the current vault state from on-chain events
+// and FDC attestations. FDC attestation under 3 minutes.
 //
 // The FDCClient handles:
-//  1. Preparing attestation requests (XRPPayment, EVMTransaction, Web2Json)
-//  2. Submitting requests to the FdcHub contract on Coston2
-//  3. Waiting for attestation round finalization
-//  4. Fetching attestation proofs from the DA layer
-//  5. Verifying proofs on-chain via FdcVerification
-//  6. Feeding attested external state back to the PositionComputer
+// 1. Preparing attestation requests (XRPPayment, EVMTransaction, Web2Json)
+// 2. Submitting requests to the FdcHub contract on Coston2
+// 3. Waiting for attestation round finalization
+// 4. Fetching attestation proofs from the DA layer
+// 5. Verifying proofs on-chain via FdcVerification
+// 6. Feeding attested external state back to the PositionComputer
 package fdc
 
 import (
@@ -204,9 +204,9 @@ func DefaultFDCClientConfig() FDCClientConfig {
 // FDCClient is the client for interacting with the FDC system on Coston2.
 // It handles attestation request preparation, submission, and verification.
 //
-// Per the report's Section 9.4.3:
+// 
 //
-//      Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)
+// Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)
 type FDCClient struct {
         config     FDCClientConfig
         client     *ethclient.Client
@@ -236,7 +236,7 @@ const fdcHubABI = `[
                 "name": "requestAttestation",
                 "outputs": [{"name": "_attestationType", "type": "bytes32"}],
                 "stateMutability": "payable",
-                "type": "function"
+                "type": "function
         }
 ]`
 
@@ -246,7 +246,7 @@ const fdcFeeABI = `[
                 "name": "getRequestFee",
                 "outputs": [{"name": "", "type": "uint256"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         }
 ]`
 
@@ -256,7 +256,7 @@ const flareSysABI = `[
                 "name": "getCurrentVotingEpochId",
                 "outputs": [{"name": "", "type": "uint256"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         }
 ]`
 
@@ -266,7 +266,7 @@ const fdcVerifyABI = `[
                 "name": "merkleRoot",
                 "outputs": [{"name": "", "type": "bytes32"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         }
 ]`
 
@@ -420,9 +420,9 @@ func (fc *FDCClient) GetRequestFee(abiEncodedRequest []byte) (uint64, error) {
 // RequestXRPPaymentAttestation requests an XRPPayment attestation from the FDC.
 // This verifies that an XRPL payment was made and returns the attested data.
 //
-// Per the report's Section 9.4.1:
+// 
 //
-//      FDC Attestations: XRPPayment (XRPL transfers settled)
+// FDC Attestations: XRPPayment (XRPL transfers settled)
 func (fc *FDCClient) RequestXRPPaymentAttestation(transactionID string) (*AttestationRequest, error) {
         if !fc.connected {
                 return nil, fmt.Errorf("not connected to RPC")
@@ -483,9 +483,9 @@ func (fc *FDCClient) RequestXRPPaymentAttestation(transactionID string) (*Attest
 // data from Hyperliquid's API. The response is then ABI-encoded and returned
 // as an FDC-attested data point.
 //
-// Per the report's Section 9.4.1:
+// 
 //
-//      PMW Layer controls wallets on Hyperliquid (open/close hedges)
+// PMW Layer controls wallets on Hyperliquid (open/close hedges)
 func (fc *FDCClient) RequestHyperliquidStateAttestation(accountAddress string) (*HyperliquidStateAttestation, error) {
         if !fc.connected {
                 return nil, fmt.Errorf("not connected to RPC")
@@ -579,7 +579,7 @@ func (fc *FDCClient) prepareWeb2JsonRequest(accountAddress string) ([]byte, erro
         // Build the Web2Json request for Hyperliquid API
         requestBody := map[string]interface{}{
                 "url":              "https://api.hyperliquid.xyz/info",
-                "postProcessJq":    ".[] | select(.user == \"" + accountAddress + "\")",
+                "postProcessJq":    ".[] | select(.user == \" + accountAddress + "\")",
                 "abiSignature":     "HyperliquidState(string accountAddress, uint256 totalValue, uint256 marginRatio)",
         }
 
@@ -863,7 +863,7 @@ func (fc *FDCClient) FetchAttestationProof(votingRoundID uint64, abiEncodedReque
 // WaitForAttestationProof polls the DA layer until the attestation proof is available.
 // This blocks for up to maxWait duration, checking every pollInterval.
 //
-// Per the report's Section 9.4.8: FDC attestation under 3 minutes.
+// FDC attestation under 3 minutes.
 func (fc *FDCClient) WaitForAttestationProof(ctx context.Context, votingRoundID uint64, abiEncodedRequest []byte, maxWait time.Duration) (*DAProofResponse, error) {
         if !fc.connected {
                 return nil, fmt.Errorf("not connected to RPC")
@@ -933,8 +933,8 @@ func (fc *FDCClient) VerifyAttestationProofOnChain(proofBytes []byte, dataBytes 
 // 5. Verify proof on-chain
 // 6. Return the attested XRPPayment data
 //
-// Per the report's Section 9.4.1: XRPPayment (XRPL transfers settled)
-// Per the report's Section 9.4.3: (2) FDC attestation responses → PositionComputer (TEE)
+// XRPPayment (XRPL transfers settled)
+// (2) FDC attestation responses → PositionComputer (TEE)
 func (fc *FDCClient) FullXRPPaymentAttestationFlow(ctx context.Context, transactionID string) (*XRPPaymentAttestation, error) {
         // Step 1: Request the attestation
         request, err := fc.RequestXRPPaymentAttestation(transactionID)
@@ -951,7 +951,7 @@ func (fc *FDCClient) FullXRPPaymentAttestationFlow(ctx context.Context, transact
                 }, fmt.Errorf("attestation request not submitted: status=%s", request.Status)
         }
 
-        // Step 2: Wait for attestation proof (up to 3 minutes per report spec)
+        // Step 2: Wait for attestation proof (up to 3 minutes per the specification)
         proof, err := fc.WaitForAttestationProof(ctx, request.VotingRound, request.ABIEncoded, 3*time.Minute)
         if err != nil {
                 logger.Warnf("[FDCClient] Proof not available within timeout: %v", err)
@@ -998,7 +998,7 @@ func (fc *FDCClient) FullXRPPaymentAttestationFlow(ctx context.Context, transact
 // 3. Wait for attestation proof
 // 4. Return attested Hyperliquid state
 //
-// Per the report's Section 9.4.1: PMW Layer controls wallets on Hyperliquid (open/close hedges)
+// PMW Layer controls wallets on Hyperliquid (open/close hedges)
 func (fc *FDCClient) FullHyperliquidStateAttestationFlow(ctx context.Context, accountAddress string) (*HyperliquidStateAttestation, error) {
         // Step 1: Fetch current state from Hyperliquid API
         hlState, err := fc.RequestHyperliquidStateAttestation(accountAddress)
@@ -1032,8 +1032,8 @@ func (fc *FDCClient) FullHyperliquidStateAttestationFlow(ctx context.Context, ac
 func (fc *FDCClient) parseXRPPaymentFromProof(attestation *XRPPaymentAttestation, data []byte) {
         // The FDC proof data contains the attestation response body.
         // For XRPPayment, the response includes:
-        //   blockNumber, blockTimestamp, sourceAddressHash, receivingAddressHash,
-        //   spentAmount, receivedAmount, standardPaymentReference, oneToOne
+        // blockNumber, blockTimestamp, sourceAddressHash, receivingAddressHash,
+        // spentAmount, receivedAmount, standardPaymentReference, oneToOne
         // This is ABI-encoded, but for the proof verification we just need the key fields.
         if len(data) > 0 {
                 attestation.ProofVerified = true

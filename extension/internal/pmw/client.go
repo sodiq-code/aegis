@@ -1,32 +1,32 @@
 // Package pmw implements the PMW (Protocol Managed Wallets) client for the Aegis vault system.
 //
-// Task 14 (Day 14): PMW integration: wire ActionExecutor to PMW for XRPL execution.
-// Per the report's Section 9.4.1:
+// PMW integration: wire ActionExecutor to PMW for XRPL execution.
+// 
 //
-//   PMW Layer -- controls wallets on:
-//     XRPL (settle FXRP, issue payments)
-//     Base (FXRP OFT transfers)
-//     Hyperliquid (open/close hedges)
+// PMW Layer -- controls wallets on:
+// XRPL (settle FXRP, issue payments)
+// Base (FXRP OFT transfers)
+// Hyperliquid (open/close hedges)
 //
-// Per the report's Section 9.4.2 (Sequence diagram — risk rebalance flow):
+// 
 //
-//   RiskAgent → propose action (move FXRP to XRPL) → InstructionSender
-//   → policy check (on-chain) → instruction → PMW → sign & submit → XRPL
+// RiskAgent → propose action (move FXRP to XRPL) → InstructionSender
+// → policy check (on-chain) → instruction → PMW → sign & submit → XRPL
 //
-// Per the report's Section 9.4.8 (Inference pipeline):
+// 
 //
-//   The ActionExecutor emits any PMW instructions.
-//   PMW execution under 60 seconds.
+// The ActionExecutor emits any PMW instructions.
+// PMW execution under 60 seconds.
 //
 // The PMWClient bridges the ActionExecutor and the real FCC Diamond on Coston2,
 // enabling the agent to trigger real PMW XRPL transactions on policy breach.
 //
 // Key Design Decisions:
-//  1. All PMW calls go through the FCC Diamond at 0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE
-//  2. Wallet projects are created via the WalletProjectManagerFacet
-//  3. Wallets are created and enabled via the WalletManagerFacet
-//  4. Signing instructions are submitted via the InstructionsFacet
-//  5. The client is thread-safe and tracks all state locally
+// 1. All PMW calls go through the FCC Diamond at 0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE
+// 2. Wallet projects are created via the WalletProjectManagerFacet
+// 3. Wallets are created and enabled via the WalletManagerFacet
+// 4. Signing instructions are submitted via the InstructionsFacet
+// 5. The client is thread-safe and tracks all state locally
 package pmw
 
 import (
@@ -76,42 +76,42 @@ const WalletProjectManagerFacetABI = `[
                 "name": "createProject",
                 "outputs": [{"name": "_projectId", "type": "bytes32"}],
                 "stateMutability": "nonpayable",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getExtensionId",
                 "outputs": [{"name": "", "type": "uint256"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getOwner",
                 "outputs": [{"name": "", "type": "address"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getKeyType",
                 "outputs": [{"name": "", "type": "bytes32"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getSigningAlgo",
                 "outputs": [{"name": "", "type": "bytes32"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "confirmOwnership",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function"
+                "type": "function
         }
 ]`
 
@@ -122,42 +122,42 @@ const WalletManagerFacetABI = `[
                 "name": "createWallet",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
                 "name": "enableWallet",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
                 "name": "closeWalletInitialization",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getProjectWalletIds",
                 "outputs": [{"name": "", "type": "bytes32[]"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
                 "name": "getWalletStatus",
                 "outputs": [{"name": "", "type": "uint8"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
                 "name": "getWalletProjectId",
                 "outputs": [{"name": "", "type": "bytes32"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
@@ -167,7 +167,7 @@ const WalletManagerFacetABI = `[
                         {"name": "threshold", "type": "uint256"}
                 ],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         }
 ]`
 
@@ -178,35 +178,35 @@ const ExtensionManagerFacetABI = `[
                 "name": "getSystemSupportedPlatforms",
                 "outputs": [{"name": "", "type": "bytes32[]"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [],
                 "name": "getSystemSupportedKeyTypes",
                 "outputs": [{"name": "", "type": "bytes32[]"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_keyType", "type": "bytes32"}],
                 "name": "getSystemSupportedSigningAlgos",
                 "outputs": [{"name": "", "type": "bytes32[]"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [],
                 "name": "nextPublicExtensionId",
                 "outputs": [{"name": "", "type": "uint256"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [{"name": "_extensionId", "type": "uint256"}],
                 "name": "getTeeExtensionInstructionsSender",
                 "outputs": [{"name": "", "type": "address"}],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         }
 ]`
 
@@ -225,13 +225,13 @@ const InstructionsFacetABI = `[
                                         {"name": "claimBackAddress", "type": "address"}
                                 ],
                                 "name": "_instructionParams",
-                                "type": "tuple"
+                                "type": "tuple
                         }
                 ],
                 "name": "sendInstructions",
                 "outputs": [{"name": "_instructionId", "type": "bytes32"}],
                 "stateMutability": "payable",
-                "type": "function"
+                "type": "function
         }
 ]`
 
@@ -305,10 +305,10 @@ func DefaultPMWClientConfig() PMWClientConfig {
 // It wraps the FCC Diamond and provides high-level methods for wallet
 // management and XRPL instruction submission.
 //
-// Per the report's Section 9.4.2:
+// 
 //
-//      The TEE orchestrates four tools: FTSO reader, FDC verifier,
-//      PMW executor (cross-chain transactions), and SolvencyRoot publisher.
+// The TEE orchestrates four tools: FTSO reader, FDC verifier,
+// PMW executor (cross-chain transactions), and SolvencyRoot publisher.
 //
 // The PMWClient is the PMW executor tool.
 type PMWClient struct {
@@ -497,9 +497,9 @@ func (pc *PMWClient) QuerySystemCapabilities() (*PMWSystemCapabilities, error) {
 // CreateWalletProject creates a new wallet project on the FCC Diamond.
 // This registers the project on-chain and assigns a project ID.
 //
-// Per the report's Section 9.4.2:
+// 
 //
-//      PMW Layer controls wallets on XRPL (settle FXRP, issue payments)
+// PMW Layer controls wallets on XRPL (settle FXRP, issue payments)
 func (pc *PMWClient) CreateWalletProject(extensionID uint64) (*WalletProject, error) {
         if !pc.connected {
                 return nil, fmt.Errorf("not connected to RPC")
@@ -816,9 +816,9 @@ func (pc *PMWClient) GetProjectWalletIDs(projectID [32]byte) ([][32]byte, error)
 // SubmitXRPLInstruction submits an XRPL signing instruction via the FCC Diamond.
 // This is the core method that triggers a real PMW XRPL transaction.
 //
-// Per the report's Section 9.4.2:
+// 
 //
-//      InstructionSender → PMW → sign & submit → XRPL
+// InstructionSender → PMW → sign & submit → XRPL
 //
 // The instruction is sent to the FCC Diamond, which routes it through TEE machines
 // for consensus signing and execution on XRPL.
@@ -982,9 +982,9 @@ func (pc *PMWClient) SubmitXRPLInstruction(
 // SubmitXRPLInstructionViaInstructionSender submits an XRPL instruction via the
 // Aegis InstructionSender contract, which then routes it to the FCC Diamond.
 //
-// Per the report's Section 9.4.2:
+// 
 //
-//      RiskAgent → propose action → InstructionSender → policy check → PMW → XRPL
+// RiskAgent → propose action → InstructionSender → policy check → PMW → XRPL
 func (pc *PMWClient) SubmitXRPLInstructionViaInstructionSender(
         instructionSenderAddr string,
         instrType uint8, // 0=rebalance, 1=hedge, 2=deleverage, 3=emergency_exit
@@ -1008,7 +1008,7 @@ func (pc *PMWClient) SubmitXRPLInstructionViaInstructionSender(
                         "name": "sendInstruction",
                         "outputs": [],
                         "stateMutability": "nonpayable",
-                        "type": "function"
+                        "type": "function
                 }
         ]`
 

@@ -6,8 +6,8 @@ import "./interfaces/vault/IVerifierRole.sol";
 
 /// @title SolvencyRoot
 /// @notice Merkle root computation and on-chain publication for Aegis vault solvency proofs.
-///         Implements the report-specified API (Section 9.4.5):
-///         publishRoot(root, surplusBps), verifySolvency(proof, leaf).
+/// Implements the vault API:
+/// publishRoot(root, surplusBps), verifySolvency(proof, leaf).
 contract SolvencyRoot is ISolvencyRoot {
     // --- State Variables ---
 
@@ -56,7 +56,7 @@ contract SolvencyRoot is ISolvencyRoot {
         _minCollateralRatio = initialMinCollateralRatio;
     }
 
-    // --- Report-Specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @inheritdoc ISolvencyRoot
     function publishRoot(bytes32 root, uint256 surplusBps) external override onlyVerifier {

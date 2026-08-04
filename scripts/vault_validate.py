@@ -2,7 +2,7 @@
 """
 Vault Contracts Validation Script for Aegis
 ============================================
-Task 4: Design vault contracts (VaultCore, PolicyRegistry, SolvencyRoot,
+Design vault contracts (VaultCore, PolicyRegistry, SolvencyRoot,
         InstructionSender, VerifierRole) — Solidity interfaces finalised.
 
 This script validates the FAssets integration and vault contract design on Coston2:
@@ -45,7 +45,7 @@ def check_pass(name, result=True):
 
 def main():
     print("=" * 70)
-    print("AEGIS VAULT CONTRACTS VALIDATION — TASK 4")
+    print("AEGIS VAULT CONTRACTS VALIDATION — ")
     print("=" * 70)
     print(f"Network: Coston2 (Flare Testnet)")
     print(f"RPC: {COSTON2_RPC}")
@@ -228,7 +228,7 @@ def main():
         status = "PASS" if result else "FAIL"
         print(f"  [{status}] {name}")
 
-    print(f"\n  {passed}/{total} checks passed")
+    print(f"\n {passed}/{total} checks passed")
 
     # Acceptance criterion
     acceptance = (
@@ -240,11 +240,11 @@ def main():
         results.get("ftso_v2_resolved", False)
     )
 
-    print(f"\n  ACCEPTANCE CRITERION: Solidity interfaces finalised; FAssets integration verified")
+    print(f"\n ACCEPTANCE CRITERION: Solidity interfaces finalised; FAssets integration verified")
     print(f"  Result: {'MET' if acceptance else 'NOT MET'}")
 
     if acceptance:
-        print("\n  Vault contracts design COMPLETE.")
+        print("\n Vault contracts design COMPLETE.")
         print("  The following contracts and interfaces are finalised:")
         print("  - IVaultCore: deposit, withdrawal, valuation, FTSO price integration")
         print("  - IPolicyRegistry: risk policies, validation, assignment")

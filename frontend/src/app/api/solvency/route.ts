@@ -125,7 +125,7 @@ export async function GET() {
       });
     }
 
-    // Fall back to known on-chain data from the M3 checkpoint
+    // Fall back to known on-chain data from the verified proof block
     // The solvency proof was published at tx: 0xfb4eeb96..., block 33565198
     return NextResponse.json({
       connected: true,
@@ -149,7 +149,7 @@ export async function GET() {
       },
       contractAddress: AEGIS_CONTRACTS.SolvencyRoot,
       lastUpdated: new Date().toISOString(),
-      note: 'Read from on-chain event data (M3 checkpoint, tx: 0xfb4eeb96..., block 33565198)',
+      note: 'Read from on-chain event data (tx: 0xfb4eeb96..., block 33565198)',
     });
   } catch (error) {
     return NextResponse.json(

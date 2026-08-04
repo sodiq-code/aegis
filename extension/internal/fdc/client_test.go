@@ -1,6 +1,6 @@
 // Package fdc implements the FDC (Flare Data Connector) client for the Aegis vault system.
 //
-// Task 15 (Day 15): FDC integration: attestation of XRPL payment + Hyperliquid state.
+// FDC integration: attestation of XRPL payment + Hyperliquid state.
 // Acceptance criterion: External state attested and fed back to PositionComputer.
 package fdc
 

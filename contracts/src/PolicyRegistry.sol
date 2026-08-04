@@ -5,9 +5,9 @@ import "./interfaces/vault/IPolicyRegistry.sol";
 
 /// @title PolicyRegistry
 /// @notice Registry for risk policies that govern Aegis vault operations.
-///         Implements the report-specified API (Section 9.4.5):
-///         maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets.
-///         Three default policies (Conservative/Balanced/Aggressive) are created at deploy.
+/// Implements the vault API:
+/// maxDrawdownBps, maxSingleExposureBps, hedgeThresholdBps, allowedAssets.
+/// Three default policies (Conservative/Balanced/Aggressive) are created at deploy.
 contract PolicyRegistry is IPolicyRegistry {
     // --- State Variables ---
 
@@ -89,7 +89,7 @@ contract PolicyRegistry is IPolicyRegistry {
         );
     }
 
-    // --- Report-Specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @inheritdoc IPolicyRegistry
     function setPolicy(uint256 policyId, Policy calldata p) external override onlyPolicyOwner(policyId) {
@@ -273,7 +273,7 @@ contract PolicyRegistry is IPolicyRegistry {
         policy.isActive = true;
         policy.createdAt = block.timestamp;
         policy.updatedAt = block.timestamp;
-        // Report-specified fields
+        // Vault fields
         policy.maxDrawdownBps = maxDrawdownBps;
         policy.maxSingleExposureBps = maxSingleExposureBps;
         policy.hedgeThresholdBps = hedgeThresholdBps;

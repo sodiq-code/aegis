@@ -1,12 +1,12 @@
-# Aegis -- A Verifiable, Confidential, AI-Managed Cross-Chain Treasury and Autonomous Risk Layer for XRP-Native Institutions on Flare
+# Aegis
 
-> **Thesis:** Institutional XRP treasuries need three things no Flare product offers today -- confidentiality, verifiable solvency, and autonomous cross-chain risk management. Aegis delivers all three using Flare's newest primitives -- FCC, PMW, and FDC -- together.
+A verifiable, confidential, AI-managed cross-chain treasury protocol for XRP-native institutions on Flare. Aegis gives treasury holders three properties that no single Flare product offers today — confidentiality, verifiable solvency, and autonomous cross-chain risk management — by composing Flare's enshrined primitives (FAssets, FTSO, FDC, FCC, and PMW) in a single stack.
 
-## Why This Wins
+## Overview
 
-- **Uses all five Flare primitives in a load-bearing way** -- FAssets, FTSO, FDC, FCC, and PMW are each structurally required; remove any one and the product cannot exist.
-- **Institutional ICP** -- Targets corporate XRP treasuries (VivoPower committed USD 100M), a real and growing category no current Flare product serves.
-- **Verifiable-confidential pattern** -- The confidentiality-to-verifiability transformation is the emotional core of the Flare 2.0 thesis; Aegis is the reference implementation.
+- **All five Flare primitives are load-bearing** — FAssets, FTSO, FDC, FCC, and PMW are each structurally required; remove any one and the product cannot exist.
+- **Built for institutional treasury management** — targets corporate XRP treasuries and large FLR holders, a category that is actively forming but lacks a dedicated product surface on Flare.
+- **Verifiable-confidential pattern** — positions are computed inside a TEE and published as a Merkle root, so an auditor can verify solvency cryptographically without seeing any individual position.
 
 ## Architecture
 
@@ -103,7 +103,6 @@ The vault is currently in WARNING state: `isSolvent()` returns `(false, 14000)`,
 | Go extension | 13 packages pass |
 | TypeScript SDK | Compiles with `tsc --noEmit` |
 | Frontend | Next.js 16.3.0 builds with 10 API routes, TypeScript clean, ESLint clean |
-| M4 checkpoint | 97/97 checks pass (demo rehearsal 6.80s) |
 
 ## Quickstart
 
@@ -200,14 +199,14 @@ for addr in 0xcb08be1cc86d3f94c54c64682372e32f669134bc 0xb513516d02d88be754c5204
   echo "$addr: $(cast codesize $addr --rpc-url $RPC) bytes"
 done
 
+# Run the full deployment verification script
+bash scripts/verify-aegis.sh
+
 # Run Foundry tests
 cd contracts && forge test --summary
 
 # Run Go extension tests
 cd extension && go test ./...
-
-# Run M4 checkpoint
-python3 scripts/m4_checkpoint.py
 ```
 
 ## Repository Structure
@@ -223,7 +222,6 @@ aegis/
 |   +-- deployment.md            # Coston2 / Songbird / Mainnet deployment, verification checklist
 |   +-- security.md              # Threat model, mitigations, audit status
 |   +-- api.md                   # Contract + extension API reference (all interfaces)
-|   +-- demo-script.md           # The five-minute demo script
 +-- contracts/                   # Foundry project
 |   +-- foundry.toml
 |   +-- src/
@@ -246,12 +244,11 @@ aegis/
 |       +-- DeployPMWValidator.s.sol
 |       +-- DeployFDCAttestor.s.sol
 |       +-- DeployVaultContracts.s.sol
-+-- scripts/                    # Python validation & checkpoint scripts
-|   +-- pmw_validate.py          # PMW validation on Coston2
++-- scripts/                    # Validation & deployment verification
 |   +-- fdc_validate.py          # FDC attestation validation on Coston2
 |   +-- vault_validate.py        # Vault contracts & FAssets integration validation
 |   +-- position_validate.py     # PositionComputer & SolvencyAttestor validation
-|   +-- m1_checkpoint.py         # M1 checkpoint
+|   +-- verify-aegis.sh          # Full deployment verification script
 +-- extension/                   # FCC extension (Go, in TEE)
 |   +-- go.mod
 |   +-- cmd/server/main.go
@@ -271,7 +268,6 @@ aegis/
 |   |   +-- audit-client.ts
 |   |   +-- config.ts
 |   |   +-- provider.ts
-|   +-- test/
 |   +-- package.json
 +-- frontend/                    # Next.js dashboard
 |   +-- app/
@@ -290,35 +286,15 @@ aegis/
 +-- docker-compose.coston2.yaml
 ```
 
-## M4 Checkpoint Status
-
-- **M4 SIGN-OFF**: GRANTED (97/97 checks pass)
-- **Demo rehearsal timing**: 6.80s (limit: 300s) -- well under 5 minutes
-- **All previous milestones (M1, M2, M3)**: Verified
-- **Demo path proven end-to-end**: deposit -> risk event -> PMW rebalance -> solvency attestation
-- **SDK builds and compiles**: TypeScript SDK @aegis/sdk v1.0.0
-- **Foundry tests pass**: 143 tests, 0 failures
-- **Go tests pass**: 13 packages
-- **Contracts deployed on Coston2**: 7 Aegis contracts + 8 system contracts verified
-- **FTSO V2 price feeds**: XRP/USD ~$1.07 via VaultCore, refreshed every ~90s
-- **FDC verification infrastructure**: FdcHub, FdcVerification, FdcRequestFeeConfigs, Fdc2Hub, Fdc2Verification
-- **PMW Diamond accessible**: FlareTeeManager on Coston2 (18 facets)
-- **Frontend routes verified**: 10 API routes, 3 hooks, 2 libs
-- **CI pipeline**: GitHub Actions (forge test, tsc, eslint, next build, secret scan)
-- **ESLint**: 0 errors, 0 warnings
-- **TypeScript**: strict mode, no errors
-- **Production build**: 13 routes (3 static + 10 dynamic), compiles in <5s
-- **Vault solvency state**: `isSolvent()` = `(false, 14000)` -- WARNING (140% < 150% threshold)
-- **VerifierRole status**: Deployed (3,104 bytes code)
-
 ## Roadmap
 
-| Phase | Timeline | Milestone |
-|---|---|---|
-| Hackathon MVP | Weeks 1-6 | Coston2 deployment, demo, DoraHacks submission |
-| Post-hackathon | Month 1-2 | External audit, Songbird deployment, institutional pilot |
-| Mainnet launch | Month 3 | Mainnet deployment, first institutional customer |
-| Scale | Month 4-6 | Multi-vault, additional asset support, SaaS tier |
+| Phase | Milestone |
+|---|---|
+| Coston2 deployment | Contracts live, demo path proven end-to-end |
+| External audit | Trail of Bits (or equivalent) security audit |
+| Songbird deployment | Canary-network deployment after governance approval |
+| Mainnet launch | Mainnet deployment with first institutional customer |
+| Scale | Multi-vault, additional asset support, SaaS tier |
 
 ## License
 
@@ -327,7 +303,3 @@ MIT
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
-
----
-
-*Built for the [Flare Summer Signal Hackathon](https://dorahacks.io/hackathon/flaresummersignal/detail) on DoraHacks.*

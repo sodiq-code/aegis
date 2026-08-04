@@ -62,17 +62,17 @@ type State struct {
         AgentTotalActions     uint64  `json:"agentTotalActions"`
         AgentTotalAttestations uint64 `json:"agentTotalAttestations"`
 
-        // Policy enforcement stats (Task 12)
+        // Policy enforcement stats
         PolicyEnforcementStats string `json:"policyEnforcementStats,omitempty"`
         ExecutorStats          string `json:"executorStats,omitempty"`
 
-        // PMW connection status (Task 14)
+        // PMW connection status
         PMWStatus string `json:"pmwStatus,omitempty"`
 
-        // FDC connection status (Task 15)
+        // FDC connection status
         FDCStatus string `json:"fdcStatus,omitempty"`
 
-        // Safe-state manager status (Task 17)
+        // Safe-state manager status
         VaultMode       string `json:"vaultMode,omitempty"`
         SafeStateReason string `json:"safeStateReason,omitempty"`
 }

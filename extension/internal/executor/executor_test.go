@@ -128,7 +128,7 @@ func TestActionExecutor_EnableWallet_NotFound(t *testing.T) {
 	}
 }
 
-// ─── Task 12: PMWExecutor Interface Tests ────────────────────────────────────
+// ─── PMWExecutor Interface Tests ────────────────────────────────────
 
 func TestActionExecutor_ExecuteRebalance_Valid(t *testing.T) {
 	ae := newTestActionExecutor()

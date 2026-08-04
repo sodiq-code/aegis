@@ -10,21 +10,21 @@ import "./interfaces/vault/IVerifierRole.sol";
 /// @title PMWInstructionRelay
 /// @notice Relays Aegis vault instructions to the FCC Diamond for PMW XRPL execution.
 ///
-/// Task 14 (Day 14): PMW integration: wire ActionExecutor to PMW for XRPL execution.
-/// Per the report's Section 9.4.2:
+/// PMW integration: wire ActionExecutor to PMW for XRPL execution.
+/// 
 ///
-///   RiskAgent → propose action → InstructionSender → policy check → PMW → XRPL
+/// RiskAgent → propose action → InstructionSender → policy check → PMW → XRPL
 ///
 /// This contract bridges the Aegis vault system and the FCC Diamond, enabling
 /// the RiskAgent to trigger real PMW XRPL transactions on policy breach.
 ///
 /// Flow:
-///   1. RiskAgent detects policy breach
-///   2. ActionExecutor validates action against PolicyEngine
-///   3. ActionExecutor calls PMWInstructionRelay.executeAction()
-///   4. PMWInstructionRelay submits instruction to FCC Diamond
-///   5. TEE machines sign and execute the XRPL transaction
-///   6. FDC attestation confirms the transaction on XRPL
+/// 1. RiskAgent detects policy breach
+/// 2. ActionExecutor validates action against PolicyEngine
+/// 3. ActionExecutor calls PMWInstructionRelay.executeAction()
+/// 4. PMWInstructionRelay submits instruction to FCC Diamond
+/// 5. TEE machines sign and execute the XRPL transaction
+/// 6. FDC attestation confirms the transaction on XRPL
 contract PMWInstructionRelay {
     // ─── State Variables ──────────────────────────────────────────────────
 
@@ -167,7 +167,7 @@ contract PMWInstructionRelay {
     /// @param _amount The amount to execute.
     /// @param _destination The destination address on XRPL.
     /// @dev When PMW is not initialized, the action is still submitted via the InstructionSender
-    ///      for on-chain tracking. The TEE extension will handle the actual PMW execution.
+    /// for on-chain tracking. The TEE extension will handle the actual PMW execution.
     function executeAction(
         uint8 _actionType,
         uint256 _amount,

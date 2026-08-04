@@ -6,9 +6,9 @@ import "../src/PolicyRegistry.sol";
 import "../src/interfaces/vault/IPolicyRegistry.sol";
 
 /// @title PolicyRegistryHardening
-/// @notice Task 29 hardening: edge-case and fuzz tests for PolicyRegistry.
-///         Covers policy CRUD edge cases, risk level transitions, validation
-///         boundary conditions, and access control.
+/// @notice hardening: edge-case and fuzz tests for PolicyRegistry.
+/// Covers policy CRUD edge cases, risk level transitions, validation
+/// boundary conditions, and access control.
 contract PolicyRegistryHardening is Test {
     PolicyRegistry public policyRegistry;
 

@@ -44,11 +44,11 @@ type Extension struct {
         PolicyEngine     *policy.PolicyEngine
         ActionExecutor   *executor.ActionExecutor
 
-        // Task 15: FDC client for external state attestation
+        // FDC client for external state attestation
         FDCClient        *fdc.FDCClient
         FDCPositionBridge *fdc.FDCPositionBridge
 
-        // Task 17: Safe-state manager for error handling
+        // Safe-state manager for error handling
         SafeStateManager *safestate.SafeStateManager
 }
 
@@ -58,9 +58,9 @@ type Extension struct {
 // PolicyProvider interface. This wiring ensures that the RiskAgent's decisions
 // are validated against the deterministic policy constraints.
 //
-// Per the report's Section 9.3.3: "The Policy Engine is a deterministic rule
+// The Policy Engine is a deterministic rule
 // engine that maps the risk score and current positions to specific policy
-// actions within the constraints set by the on-chain PolicyRegistry."
+// actions within the constraints set by the on-chain PolicyRegistry.
 type PolicyEngineAdapter struct {
         engine *policy.PolicyEngine
 }
@@ -122,8 +122,8 @@ func (a *PolicyEngineAdapter) GetPolicy(policyID uint64) (*risk.PolicyInfo, erro
 // PMWExecutor interface. This wiring ensures that the RiskAgent's actions are
 // executed through the ActionExecutor with policy enforcement.
 //
-// Per the report's Section 9.3.3: "The Action Executor translates policy actions
-// into PMW instructions and submits them via the InstructionSender."
+// The Action Executor translates policy actions
+// into PMW instructions and submits them via the InstructionSender.
 type ActionExecutorAdapter struct {
         executor *executor.ActionExecutor
 }
@@ -218,9 +218,9 @@ func New(extensionPort, signPort int) *Extension {
         // Wire the PolicyEngine into the ActionExecutor for deterministic enforcement
         e.ActionExecutor.SetPolicyChecker(e.PolicyEngine)
 
-        // Task 14: Wire the PMWClient into the ActionExecutor for real XRPL execution
-        // Per the report's Section 9.4.2: "RiskAgent → propose action → InstructionSender
-        // → policy check → PMW → sign & submit → XRPL"
+        // Wire the PMWClient into the ActionExecutor for real XRPL execution
+        // RiskAgent → propose action → InstructionSender
+        // → policy check → PMW → sign & submit → XRPL
         pmwConfig := pmw.DefaultPMWClientConfig()
         pmwClient := pmw.NewPMWClient(pmwConfig)
         if err := pmwClient.Connect(); err != nil {
@@ -232,8 +232,8 @@ func New(extensionPort, signPort int) *Extension {
                 fmt.Printf("PMWClient connected to Coston2 — real XRPL execution enabled\n")
         }
 
-        // Task 15: Wire the FDCClient into the Extension for external state attestation
-        // Per the report's Section 9.4.3: "Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)"
+        // Wire the FDCClient into the Extension for external state attestation
+        // Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)
         fdcConfig := fdc.DefaultFDCClientConfig()
         fdcClient := fdc.NewFDCClient(fdcConfig)
         if err := fdcClient.Connect(); err != nil {
@@ -243,9 +243,9 @@ func New(extensionPort, signPort int) *Extension {
                 fmt.Printf("FDCClient connected to Coston2 — real FDC attestation enabled\n")
 
                 // Create the FDCPositionBridge to wire FDC attested data to PositionComputer
-                // This is the key integration component for Task 15:
-                //   XRPPayment attestation → PositionComputer.UpdateExternalState(XRPL)
-                //   Hyperliquid state attestation → PositionComputer.UpdateExternalState(HYPERLIQUID)
+                // This is the key integration component for 
+                // XRPPayment attestation → PositionComputer.UpdateExternalState(XRPL)
+                // Hyperliquid state attestation → PositionComputer.UpdateExternalState(HYPERLIQUID)
                 bridgeConfig := fdc.DefaultFDCPositionBridgeConfig()
                 e.FDCPositionBridge = fdc.NewFDCPositionBridge(bridgeConfig, fdcClient, e.PositionComputer)
                 if err := e.FDCPositionBridge.Connect(); err != nil {
@@ -313,16 +313,16 @@ func New(extensionPort, signPort int) *Extension {
                 e.RiskAgent.SetAttestationPublisher(attestPublisher)
         }
 
-        // Task 17: Initialize the SafeStateManager for error handling, safe-state logic, and emergency exit
-        // Per the report's Section 9.3.12: "If the TEE fails or becomes unavailable, the vault enters
+        // Initialize the SafeStateManager for error handling, safe-state logic, and emergency exit
+        // If the TEE fails or becomes unavailable, the vault enters
         // a safe state: no new positions are taken, no rebalances occur, and the user can withdraw
-        // their deposited assets via an emergency exit path that does not depend on the TEE."
+        // their deposited assets via an emergency exit path that does not depend on the TEE.
         safeStateConfig := safestate.DefaultSafeStateConfig()
         e.SafeStateManager = safestate.NewSafeStateManager(safeStateConfig)
 
         // Register SafeStateManager callbacks
         e.SafeStateManager.OnEnterSafeState(func(reason string) {
-                fmt.Printf("⚠️  VAULT ENTERED SAFE STATE: %s\n", reason)
+                fmt.Printf("⚠️ VAULT ENTERED SAFE STATE: %s\n", reason)
                 fmt.Printf("   No new deposits or rebalances; withdrawals and emergency exits still allowed\n")
         })
         e.SafeStateManager.OnExitSafeState(func() {
@@ -396,12 +396,12 @@ func (e *Extension) stateHandler(w http.ResponseWriter, r *http.Request) {
                 }
         }
 
-        // Task 15: FDC connection status
+        // FDC connection status
         if e.FDCClient != nil && e.FDCClient.IsConnected() {
                 fdcStatus = "connected"
         }
 
-        // Task 17: Safe-state manager status
+        // Safe-state manager status
         vaultMode := "NORMAL"
         safeStateReason := ""
         if e.SafeStateManager != nil {
@@ -439,13 +439,13 @@ func (e *Extension) stateHandler(w http.ResponseWriter, r *http.Request) {
                         PolicyEnforcementStats: policyStats,
                         ExecutorStats:          execStats,
 
-                        // PMW connection status (Task 14)
+                        // PMW connection status
                         PMWStatus: pmwStatus,
 
-                        // FDC connection status (Task 15)
+                        // FDC connection status
                         FDCStatus: fdcStatus,
 
-                        // Safe-state manager status (Task 17)
+                        // Safe-state manager status
                         VaultMode:      vaultMode,
                         SafeStateReason: safeStateReason,
                 },

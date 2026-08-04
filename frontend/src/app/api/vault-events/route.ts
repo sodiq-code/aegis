@@ -48,10 +48,10 @@ const EVENT_TOPICS = {
   SafeStateEntered: '0xe52c6a6ea80a6cb927747fafc3fd0bd9578b70c42f4de60c99fe6fe40c8c4f7c',
 } as const;
 
-// Known activity block from M3 checkpoint (Task 18)
+// Known activity block (verified on-chain)
 const KNOWN_ACTIVITY_BLOCK = 33565198;
 
-// Known transaction hash at M3 checkpoint (verified on-chain)
+// Known transaction hash (verified on-chain)
 // Used for reference; real tx hashes are fetched from on-chain events
 const _KNOWN_M3_TX_HASH = '0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481';
 
@@ -141,7 +141,7 @@ export async function GET(request: Request) {
     if (rangeParam === 'all') {
       const events: VaultEvent[] = [];
       
-      // Scan 1: Known activity area (M3 checkpoint ±30 blocks)
+      // Scan 1: Known activity area (±30 blocks around the verified proof block)
       const historicEvents = await scanBlockRange(
         KNOWN_ACTIVITY_BLOCK - 30,
         KNOWN_ACTIVITY_BLOCK + 30

@@ -8,9 +8,9 @@ import "../src/interfaces/vault/IInstructionSender.sol";
 import "../src/interfaces/vault/IVerifierRole.sol";
 
 /// @title InstructionSenderHardening
-/// @notice Task 29 hardening: edge-case and fuzz tests for InstructionSender.
-///         Covers instruction lifecycle edge cases, status transition invariants,
-///         cancellation/failure constraints, and access control.
+/// @notice hardening: edge-case and fuzz tests for InstructionSender.
+/// Covers instruction lifecycle edge cases, status transition invariants,
+/// cancellation/failure constraints, and access control.
 contract InstructionSenderHardening is Test {
     VerifierRole public verifierRole;
     InstructionSender public instructionSender;

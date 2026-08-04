@@ -9,7 +9,7 @@ import { IPayment } from "./interfaces/fdc/IPayment.sol";
 
 /// @title FDCAttestor
 /// @notice Requests and verifies FDC XRPPayment attestations on Coston2.
-/// Task 3 acceptance criterion: FDC attestation retrieved and verified from the extension.
+/// acceptance criterion: FDC attestation retrieved and verified from the extension.
 contract FDCAttestor {
     /// @notice FDC Hub contract address.
     IFdcHub public immutable FDC_HUB;

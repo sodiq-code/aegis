@@ -1,25 +1,25 @@
 // Package risk implements the AI Risk Agent for the Aegis vault system.
 //
-// Task 11 (Day 11): Build RiskAgent module (loop: observe → score → decide → act → attest)
-// Per the report's Section 9.3.4:
+// Build RiskAgent module (loop: observe → score → decide → act → attest)
+// 
 //
-//      The agent operates as a single-threaded loop inside the TEE:
-//      observe (read FTSO + FDC + vault state) → score (run Risk Scorer) →
-//      decide (run Policy Engine) → act (submit PMW instruction via InstructionSender
-//      if policy action is non-null) → attest (publish new solvency root) →
-//      sleep (until next FTSO round or threshold event)
+// The agent operates as a single-threaded loop inside the TEE:
+// observe (read FTSO + FDC + vault state) → score (run Risk Scorer) →
+// decide (run Policy Engine) → act (submit PMW instruction via InstructionSender
+// if policy action is non-null) → attest (publish new solvency root) →
+// sleep (until next FTSO round or threshold event)
 //
-//      The loop is stateless across iterations except for the TEE-internal position state,
-//      which is rebuilt from on-chain attestations on each iteration to ensure the agent
-//      cannot drift from consensus state.
+// The loop is stateless across iterations except for the TEE-internal position state,
+// which is rebuilt from on-chain attestations on each iteration to ensure the agent
+// cannot drift from consensus state.
 //
 // Key Design Decisions:
-//  1. The agent loop is deterministic: given the same inputs, it produces the same outputs
-//  2. Position state is rebuilt from on-chain events on each iteration (no drift)
-//  3. The Policy Engine is deterministic and constrains the agent's actions
-//  4. All actions are auditable via SHAP-based feature contributions
-//  5. The agent cannot exceed policy limits — the Policy Engine enforces constraints
-//  6. Mock PMW is used for Coston2 testing; real PMW integration is Task 14
+// 1. The agent loop is deterministic: given the same inputs, it produces the same outputs
+// 2. Position state is rebuilt from on-chain events on each iteration (no drift)
+// 3. The Policy Engine is deterministic and constrains the agent's actions
+// 4. All actions are auditable via SHAP-based feature contributions
+// 5. The agent cannot exceed policy limits — the Policy Engine enforces constraints
+// 6. Mock PMW is used for Coston2 testing; real PMW integration is 
 package risk
 
 import (
@@ -399,14 +399,14 @@ func (m *MockAttestationPublisher) IsConnected() bool {
 // RiskAgent is the main AI risk management agent that runs inside the TEE.
 //
 // It implements the observe → score → decide → act → attest loop described
-// in the report's Section 9.3.4. The agent is the core of the Aegis system's
+// in the vault specification The agent is the core of the Aegis system's
 // autonomous risk management capability.
 //
 // The agent is:
-//   - Deterministic: given the same inputs, it produces the same outputs
-//   - Constrained: the Policy Engine prevents the agent from exceeding limits
-//   - Auditable: all decisions include SHAP-based feature contributions
-//   - Verifiable: the agent's state can be reconstructed from on-chain data
+// - Deterministic: given the same inputs, it produces the same outputs
+// - Constrained: the Policy Engine prevents the agent from exceeding limits
+// - Auditable: all decisions include SHAP-based feature contributions
+// - Verifiable: the agent's state can be reconstructed from on-chain data
 type RiskAgent struct {
         config  RiskAgentConfig
         scorer  *RiskScorer
@@ -617,7 +617,7 @@ func (ra *RiskAgent) RunSingleIteration() *AgentLoopResult {
 // observe reads FTSO price feeds, FDC-attested external state, and vault state.
 // This is the "observe" phase of the agent loop.
 //
-// Per the report: "The agent reads FTSO + FDC + vault state."
+// The agent reads FTSO + FDC + vault state.
 // The position state is rebuilt from on-chain events on each iteration to
 // ensure the agent cannot drift from consensus state.
 func (ra *RiskAgent) observe() (*AgentObservation, error) {
@@ -679,9 +679,9 @@ func (ra *RiskAgent) observe() (*AgentObservation, error) {
 // score runs the Risk Scorer model on the observed features.
 // This is the "score" phase of the agent loop.
 //
-// Per the report: "The Risk Scorer is a gradient-boosted model (XGBoost) that
+// The Risk Scorer is a gradient-boosted model (XGBoost) that
 // ingests FTSO price feeds, FDC-attested cross-chain state, and on-chain vault
-// parameters, and outputs a risk score (0-100) and a set of recommended actions."
+// parameters, and outputs a risk score (0-100) and a set of recommended actions.
 func (ra *RiskAgent) score(obs *AgentObservation) (*AgentDecision, error) {
         if ra.scorer == nil {
                 return nil, fmt.Errorf("risk scorer not initialized")
@@ -717,9 +717,9 @@ func (ra *RiskAgent) score(obs *AgentObservation) (*AgentDecision, error) {
 // decide applies the Policy Engine to constrain the agent's actions.
 // This is the "decide" phase of the agent loop.
 //
-// Per the report: "The Policy Engine is a deterministic rule engine that maps
+// The Policy Engine is a deterministic rule engine that maps
 // the risk score and current positions to specific policy actions (rebalance,
-// hedge, deleverage) within the constraints set by the on-chain PolicyRegistry."
+// hedge, deleverage) within the constraints set by the on-chain PolicyRegistry.
 func (ra *RiskAgent) decide(decision *AgentDecision, obs *AgentObservation) (*AgentAction, error) {
         // Apply threshold-based decision logic
         // This is deterministic: given the same risk score, the same decision is made
@@ -789,8 +789,8 @@ func (ra *RiskAgent) decide(decision *AgentDecision, obs *AgentObservation) (*Ag
 // act executes the decided action via PMW (or mock PMW).
 // This is the "act" phase of the agent loop.
 //
-// Per the report: "The Action Executor translates policy actions into PMW
-// instructions and submits them via the InstructionSender."
+// The Action Executor translates policy actions into PMW
+// instructions and submits them via the InstructionSender.
 func (ra *RiskAgent) act(action *AgentAction) error {
         if ra.pmwExecutor == nil {
                 return fmt.Errorf("PMW executor not configured")
@@ -835,7 +835,7 @@ func (ra *RiskAgent) act(action *AgentAction) error {
 // attest publishes the new solvency root on-chain.
 // This is the "attest" phase of the agent loop.
 //
-// Per the report: "The agent publishes a new solvency root."
+// The agent publishes a new solvency root.
 type AttestResult struct {
         TxHash      string `json:"txHash"`
         NewMerkleRoot string `json:"newMerkleRoot"`
@@ -896,7 +896,7 @@ func (ra *RiskAgent) attest(obs *AgentObservation) (*AttestResult, error) {
 // ─── Feature Computation ────────────────────────────────────────────────────
 
 // computeFeatures computes the RiskFeatures from the observed data.
-// This derives the 20 features specified in the report's Section 9.4.7
+// This derives the 20 features specified in the vault specification
 // from the current FTSO prices, vault state, and FDC-attested external state.
 func (ra *RiskAgent) computeFeatures(obs *AgentObservation) RiskFeatures {
         // Compute volatility features (simplified using price ratios)
@@ -972,11 +972,11 @@ func (ra *RiskAgent) computeFeatures(obs *AgentObservation) RiskFeatures {
 // This is the deterministic part of the Policy Engine.
 //
 // Threshold semantics (each threshold means "at or above this score, take the named action"):
-//   - Below RiskThresholdHold (25): hold (no action)
-//   - RiskThresholdHold (25) to RiskThresholdRebal (50): rebalance
-//   - RiskThresholdRebal (50) to RiskThresholdHedge (75): hedge
-//   - RiskThresholdHedge (75) to RiskThresholdDelev (90): deleverage
-//   - RiskThresholdDelev (90) and above: emergency exit
+// - Below RiskThresholdHold (25): hold (no action)
+// - RiskThresholdHold (25) to RiskThresholdRebal (50): rebalance
+// - RiskThresholdRebal (50) to RiskThresholdHedge (75): hedge
+// - RiskThresholdHedge (75) to RiskThresholdDelev (90): deleverage
+// - RiskThresholdDelev (90) and above: emergency exit
 func (ra *RiskAgent) applyThresholds(riskScore float64) AgentActionType {
         switch {
         case riskScore >= ra.config.RiskThresholdDelev:

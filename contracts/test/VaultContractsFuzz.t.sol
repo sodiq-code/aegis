@@ -9,8 +9,8 @@ import "../src/InstructionSender.sol";
 
 /// @title VaultContractsFuzzTest
 /// @notice Comprehensive fuzz tests for all 5 vault contracts (VerifierRole, PolicyRegistry,
-///         SolvencyRoot, InstructionSender) per Task 6 acceptance criterion:
-///         "All five contracts deployed on Coston2; fuzz tests green."
+/// SolvencyRoot, InstructionSender) per acceptance criterion:
+/// "All five contracts deployed on Coston2; fuzz tests green.
 contract VaultContractsFuzzTest is Test {
     // --- Contracts ---
     VerifierRole public verifierRole;

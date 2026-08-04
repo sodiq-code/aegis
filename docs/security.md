@@ -37,7 +37,7 @@ The VerifierRole contract at `0xb513516d02d88be754c5204e132defbb0f4156e6` on Cos
 
 ## Compliance Considerations
 
-Aegis is positioned as decentralised infrastructure, not as a regulated financial entity. KYC/AML obligations attach to the integrating custodian (e.g., BitGo), not to Aegis itself. FDC's AddressValidity attestation type supports the compliance workflow by allowing the vault to refuse deposits from non-verified addresses. The auditor verification flow supports periodic regulatory reporting without compromising confidentiality. Legal counsel should review the specific jurisdictional classification before Mainnet launch.
+Aegis is positioned as decentralised infrastructure, not as a regulated financial entity. KYC/AML obligations attach to the integrating custodian, not to Aegis itself. FDC's AddressValidity attestation type supports the compliance workflow by allowing the vault to refuse deposits from non-verified addresses. The auditor verification flow supports periodic regulatory reporting without compromising confidentiality. Legal counsel should review the specific jurisdictional classification before Mainnet launch.
 
 ## Solvency Monitoring
 
@@ -62,6 +62,6 @@ If you discover a security vulnerability, please report it privately by opening 
 
 ## Audit Status
 
-- **Pre-hackathon**: Internal review, Foundry fuzz tests (143 tests, 0 failures)
-- **Post-hackathon**: External audit planned (target: Trail of Bits or equivalent)
-- **Deployment verification**: M4 checkpoint 97/97 checks pass; code-size verification identifies VerifierRole deployment issue
+- **Current**: Internal review, Foundry fuzz tests (143 tests, 0 failures)
+- **Planned**: External audit (target: Trail of Bits or equivalent) prior to Mainnet launch
+- **Deployment verification**: Automated verification script reports all checks green; code-size verification identifies VerifierRole deployment issue

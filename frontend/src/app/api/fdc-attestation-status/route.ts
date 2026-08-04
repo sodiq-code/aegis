@@ -9,7 +9,6 @@
  * This enables the auditor to see the attestation infrastructure state
  * and understand when/where solvency proofs are anchored.
  *
- * Task 22 (Day 22): Auditor can request and verify a solvency attestation.
  */
 
 import { NextResponse } from 'next/server';

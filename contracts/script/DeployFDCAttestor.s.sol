@@ -6,7 +6,7 @@ import "../src/FDCAttestor.sol";
 
 /// @title DeployFDCAttestor
 /// @notice Deploys the FDCAttestor contract to Coston2.
-/// Task 15 (Day 15): FDC integration: attestation of XRPL payment + Hyperliquid state.
+/// FDC integration: attestation of XRPL payment + Hyperliquid state.
 contract DeployFDCAttestor is Script {
     // Coston2 FDC contract addresses
     address constant FDC_HUB = 0x48aC463d7975828989331F4De43341627b9c5f1D;

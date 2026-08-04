@@ -12,7 +12,6 @@
  *   - FDCAttestor: getCurrentVotingRound(), getMerkleRoot(), isPaymentVerified()
  *   - FdcVerification: merkleRoot() for voting rounds
  *
- * Task 22 (Day 22): Auditor can request and verify a solvency attestation.
  */
 
 'use client';

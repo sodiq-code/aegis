@@ -3,15 +3,15 @@
 //
 // This is the bridge between the TEE's SolvencyAttestor (private state)
 // and the SolvencyRoot contract (public Merkle root). It is the core of
-// the acceptance criterion for Task 9: "SolvencyRoot published on-chain
-// from extension."
+// the acceptance criterion for "SolvencyRoot published on-chain
+// from extension.
 //
 // Publication Flow:
-//   1. SolvencyAttestor computes a proof (Merkle root + collateral data)
-//   2. OnChainPublisher constructs the transaction to publishSolvencyProof()
-//   3. Transaction is signed by the TEE's registered verifier key
-//   4. Transaction is submitted to the SolvencyRoot contract on Coston2
-//   5. The proof is stored on-chain and can be verified by auditors
+// 1. SolvencyAttestor computes a proof (Merkle root + collateral data)
+// 2. OnChainPublisher constructs the transaction to publishSolvencyProof()
+// 3. Transaction is signed by the TEE's registered verifier key
+// 4. Transaction is submitted to the SolvencyRoot contract on Coston2
+// 5. The proof is stored on-chain and can be verified by auditors
 package onchain
 
 import (
@@ -46,7 +46,7 @@ const SolvencyRootABI = `[
                 "name": "publishSolvencyProof",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [],
@@ -64,11 +64,11 @@ const SolvencyRootABI = `[
                                         {"name": "isValid", "type": "bool"}
                                 ],
                                 "name": "",
-                                "type": "tuple"
+                                "type": "tuple
                         }
                 ],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "inputs": [],
@@ -78,7 +78,7 @@ const SolvencyRootABI = `[
                         {"name": "", "type": "uint256"}
                 ],
                 "stateMutability": "view",
-                "type": "function"
+                "type": "function
         },
         {
                 "anonymous": false,
@@ -90,7 +90,7 @@ const SolvencyRootABI = `[
                         {"indexed": true, "name": "attestor", "type": "address"}
                 ],
                 "name": "SolvencyProofPublished",
-                "type": "event"
+                "type": "event
         },
         {
                 "anonymous": false,
@@ -100,7 +100,7 @@ const SolvencyRootABI = `[
                         {"indexed": false, "name": "timestamp", "type": "uint256"}
                 ],
                 "name": "SolvencyWarning",
-                "type": "event"
+                "type": "event
         }
 ]`
 
@@ -230,8 +230,8 @@ func (ocp *OnChainPublisher) IsConnected() bool {
 }
 
 // PublishSolvencyProof publishes a solvency proof to the SolvencyRoot contract on-chain.
-// This is the core method that satisfies the Task 9 acceptance criterion:
-// "SolvencyRoot published on-chain from extension."
+// This is the core method that satisfies the acceptance criterion:
+// "SolvencyRoot published on-chain from extension.
 func (ocp *OnChainPublisher) PublishSolvencyProof(
         merkleRoot string,
         totalFxrpCollateral uint64,

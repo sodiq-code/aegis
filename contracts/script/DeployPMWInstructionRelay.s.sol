@@ -6,7 +6,7 @@ import "../src/PMWInstructionRelay.sol";
 
 /// @title DeployPMWInstructionRelay
 /// @notice Deploys the PMWInstructionRelay contract to Coston2.
-/// Task 14 (Day 14): PMW integration — wire ActionExecutor to PMW for XRPL execution.
+/// PMW integration — wire ActionExecutor to PMW for XRPL execution.
 contract DeployPMWInstructionRelay is Script {
     // Coston2 FCC Diamond address
     address constant FCC_DIAMOND = 0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE;

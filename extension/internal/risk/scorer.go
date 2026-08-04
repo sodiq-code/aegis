@@ -1,13 +1,13 @@
 // Package risk implements the AI Risk Scorer for the Aegis vault system.
 //
-// Task 10 (Day 10): Train XGBoost risk model on historical FTSO data (offline).
-// Per the report's Section 9.4.7:
-//   - Risk Scorer: XGBoost, ~200 trees, depth 6
-//   - Features: rolling volatility of FXRP/FLR/USD, vault leverage ratio,
-//     single-asset concentration, cross-chain exposure breakdown,
-//     recent hedge P&L, time-since-last-rebalance
-//   - Output: risk score (0-100) and action classification (hold, rebalance, hedge, deleverage)
-//   - Model file bundled into extension; inference runs in TEE
+// Train XGBoost risk model on historical FTSO data (offline).
+// 
+// - Risk Scorer: XGBoost, ~200 trees, depth 6
+// - Features: rolling volatility of FXRP/FLR/USD, vault leverage ratio,
+// single-asset concentration, cross-chain exposure breakdown,
+// recent hedge P&L, time-since-last-rebalance
+// - Output: risk score (0-100) and action classification (hold, rebalance, hedge, deleverage)
+// - Model file bundled into extension; inference runs in TEE
 package risk
 
 import (
@@ -23,7 +23,7 @@ import (
 //go:embed model/risk_score_model.json model/risk_action_model.json model/features.json model/model_meta.json
 var modelFS embed.FS
 
-// Action labels matching the report's Section 9.4.7
+// Action labels matching the vault specification
 const (
         ActionHold       = 0 // hold - no action needed, risk within acceptable range
         ActionRebalance  = 1 // rebalance - portfolio rebalance recommended, moderate risk
@@ -128,7 +128,7 @@ type XGBoostRegLossParam struct {
 // ─── Feature and Result Structures ──────────────────────────────────────────
 
 // RiskFeatures represents the input feature vector for the risk model.
-// All features match the report's Section 9.4.7 specification.
+// All features match the vault specificationification.
 type RiskFeatures struct {
         // Rolling volatility features
         XRPVol24h  float64 `json:"xrp_vol_24h"`

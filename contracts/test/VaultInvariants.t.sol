@@ -12,9 +12,9 @@ import "../src/interfaces/vault/ISolvencyRoot.sol";
 import "../src/interfaces/vault/IInstructionSender.sol";
 
 /// @title VaultInvariants
-/// @notice Task 29 hardening: system-wide invariant tests that verify
-///         cross-contract invariants and state machine properties hold
-///         across all vault contracts simultaneously.
+/// @notice hardening: system-wide invariant tests that verify
+/// cross-contract invariants and state machine properties hold
+/// across all vault contracts simultaneously.
 contract VaultInvariants is Test {
     VerifierRole public verifierRole;
     PolicyRegistry public policyRegistry;

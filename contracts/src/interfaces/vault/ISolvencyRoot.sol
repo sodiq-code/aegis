@@ -3,11 +3,11 @@ pragma solidity ^0.8.27;
 
 /// @title ISolvencyRoot
 /// @notice Merkle root computation and on-chain publication for Aegis vault solvency proofs.
-///         API matches the Aegis blueprint (Section 9.4.5) exactly:
-///         publishRoot(root, surplusBps), verifySolvency(proof, leaf).
+/// API matches the Aegis blueprint exactly:
+/// publishRoot(root, surplusBps), verifySolvency(proof, leaf).
 /// @dev The solvency root is computed by the FCC extension's SolvencyAttestor module
-///      inside the TEE and published on-chain. Auditors can verify individual positions
-///      against the published root without needing to trust the vault operator.
+/// inside the TEE and published on-chain. Auditors can verify individual positions
+/// against the published root without needing to trust the vault operator.
 interface ISolvencyRoot {
     // --- Structs ---
 
@@ -49,7 +49,7 @@ interface ISolvencyRoot {
         uint256 timestamp
     );
 
-    // --- Report-Specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @notice Publish a new solvency root on-chain (only TEE)
     /// @param root Merkle root of all position data

@@ -34,7 +34,7 @@ interface IVaultCore {
         uint256 withdrawalWaitPeriod;
     }
 
-    // --- Report-specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @notice Deposit FXRP into the vault with a risk policy.
     /// @param amount The amount of FXRP to deposit.
@@ -111,20 +111,20 @@ interface IPolicyRegistry {
         bool isActive;
         uint256 createdAt;
         uint256 updatedAt;
-        uint256 maxDrawdownBps;          // Max drawdown in basis points
-        uint256 maxSingleExposureBps;    // Max single-asset exposure in bps
-        uint256 hedgeThresholdBps;       // Hedge trigger threshold in bps
-        address[] allowedAssets;         // Assets allowed in this policy
-        uint256 maxDepositPerTx;         // Max deposit per transaction
-        uint256 maxWithdrawalPerTx;      // Max withdrawal per transaction
-        uint256 maxTotalExposure;        // Max total exposure across all positions
-        uint256 minCollateralRatio;      // Min collateral ratio (e.g., 15000 = 150%)
-        uint256 maxLeverage;             // Max leverage factor
-        uint256 withdrawalDelaySeconds;  // Delay before withdrawal executes
-        uint256 rebalanceThresholdBps;   // Rebalance trigger threshold in bps
-        uint256 maxSlippageBps;          // Max allowed slippage in bps
-        PolicyAction onRiskBreach;       // Action when risk threshold breached
-        PolicyAction onSolvencyWarning;  // Action when solvency warning triggered
+        uint256 maxDrawdownBps; // Max drawdown in basis points
+        uint256 maxSingleExposureBps; // Max single-asset exposure in bps
+        uint256 hedgeThresholdBps; // Hedge trigger threshold in bps
+        address[] allowedAssets; // Assets allowed in this policy
+        uint256 maxDepositPerTx; // Max deposit per transaction
+        uint256 maxWithdrawalPerTx; // Max withdrawal per transaction
+        uint256 maxTotalExposure; // Max total exposure across all positions
+        uint256 minCollateralRatio; // Min collateral ratio (e.g., 15000 = 150%)
+        uint256 maxLeverage; // Max leverage factor
+        uint256 withdrawalDelaySeconds; // Delay before withdrawal executes
+        uint256 rebalanceThresholdBps; // Rebalance trigger threshold in bps
+        uint256 maxSlippageBps; // Max allowed slippage in bps
+        PolicyAction onRiskBreach; // Action when risk threshold breached
+        PolicyAction onSolvencyWarning; // Action when solvency warning triggered
     }
 
     /// @notice Set a policy (owner only).
@@ -175,14 +175,14 @@ Receives the Merkle root of solvency computed inside the TEE and makes it verifi
 interface ISolvencyRoot {
     struct SolvencyProof {
         bytes32 merkleRoot;
-        uint256 surplusBps;            // Surplus over liabilities in basis points
-        uint256 totalFxrpCollateral;   // Total FXRP collateral
-        uint256 totalLiabilities;      // Total liabilities
-        uint256 collateralRatio;       // Collateral ratio (e.g., 14000 = 140%)
-        uint256 timestamp;             // When the proof was computed
-        uint256 votingRound;           // FDC voting round when proof was published
-        address attestor;              // Address that published the proof
-        bool isValid;                  // Whether the proof is currently valid
+        uint256 surplusBps; // Surplus over liabilities in basis points
+        uint256 totalFxrpCollateral; // Total FXRP collateral
+        uint256 totalLiabilities; // Total liabilities
+        uint256 collateralRatio; // Collateral ratio (e.g., 14000 = 140%)
+        uint256 timestamp; // When the proof was computed
+        uint256 votingRound; // FDC voting round when proof was published
+        address attestor; // Address that published the proof
+        bool isValid; // Whether the proof is currently valid
     }
 
     /// @notice Publish a new solvency Merkle root.
@@ -401,12 +401,12 @@ Relays Aegis vault instructions to the FCC Diamond (FlareTeeManager) for PMW XRP
 interface IPMWInstructionRelay {
     struct PMWAction {
         uint256 actionId;
-        uint8 actionType;      // 0=rebalance, 1=hedge, 2=deleverage, 3=emergency_exit
+        uint8 actionType; // 0=rebalance, 1=hedge, 2=deleverage, 3=emergency_exit
         uint256 amount;
         address destination;
         bytes32 instructionId;
         bytes32 xrplTxHash;
-        uint8 status;          // 0=pending, 1=submitted, 2=confirmed, 3=failed
+        uint8 status; // 0=pending, 1=submitted, 2=confirmed, 3=failed
         uint256 createdAt;
         uint256 confirmedAt;
     }
@@ -461,7 +461,7 @@ Receives instructions from the TEE infrastructure. The proxy calls this endpoint
 {
   "opType": "AEGIS_VAULT",
   "opCommand": "COMPUTE_POSITION",
-  "message": "..."
+  "message": "...
 }
 ```
 
@@ -500,7 +500,7 @@ Returns the extension health and version information. Used by the deployment ver
   "version": "1.0.0",
   "status": "healthy",
   "teeAttested": true,
-  "uptime": "72h"
+  "uptime": "72h
 }
 ```
 
@@ -526,8 +526,8 @@ const solvency = await vault.getSolvencyInfo();
 const riskScore = await vault.getRiskScore();
 
 // Individual reads
-const price = await vault.getXrpUsdPrice();           // ~1.07e18 on Coston2
-const deposited = await vault.getTotalDeposited();     // 0 FXRP currently
+const price = await vault.getXrpUsdPrice(); // ~1.07e18 on Coston2
+const deposited = await vault.getTotalDeposited(); // 0 FXRP currently
 const positionCount = await vault.getActivePositionCount();
 const isEmergency = await vault.isEmergencyMode();
 
@@ -553,10 +553,10 @@ const policy = new PolicyClient({
 
 // List all policies (3 default: Conservative, Balanced, Aggressive)
 const policies = await policy.listPolicies();
-const count = await policy.getPolicyCount();  // 3
+const count = await policy.getPolicyCount(); // 3
 
 // Get individual policy
-const p = await policy.getPolicy(1);  // Conservative
+const p = await policy.getPolicy(1); // Conservative
 
 // Check if action is allowed
 const result = await policy.checkAction(1, ActionType.DEPOSIT, 100);

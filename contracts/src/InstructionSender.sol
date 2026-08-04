@@ -6,8 +6,8 @@ import "./interfaces/vault/IVerifierRole.sol";
 
 /// @title InstructionSender
 /// @notice Sends cross-chain instructions to the XRPL via Flare PMW.
-///         Implements the report-specified API (Section 9.4.5):
-///         sendInstruction(payload), getResponse(instructionId).
+/// Implements the vault API:
+/// sendInstruction(payload), getResponse(instructionId).
 contract InstructionSender is IInstructionSender {
     // --- State Variables ---
 
@@ -56,7 +56,7 @@ contract InstructionSender is IInstructionSender {
         _nextInstructionId = 1;
     }
 
-    // --- Report-Specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @inheritdoc IInstructionSender
     function sendInstruction(bytes calldata payload) external override onlyVerifier {

@@ -3,10 +3,10 @@ pragma solidity ^0.8.27;
 
 /// @title IVaultCore
 /// @notice Core vault contract for Aegis — manages FXRP deposits, withdrawals,
-///         and collateral tracking using Flare FAssets and FTSO price feeds.
+/// and collateral tracking using Flare FAssets and FTSO price feeds.
 /// @dev This is the primary entry point for institutional depositors.
-///      API matches the Aegis blueprint (Section 9.4.5) exactly:
-///      depositFXRP, withdraw, emergencyExit, balanceOf, policyOf.
+/// API matches the Aegis blueprint exactly:
+/// depositFXRP, withdraw, emergencyExit, balanceOf, policyOf.
 interface IVaultCore {
     // --- Structs ---
 
@@ -65,7 +65,7 @@ interface IVaultCore {
         uint256 timestamp
     );
 
-    // --- Report-Specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @notice Deposit FXRP into the vault with a specified policy
     /// @param amount Amount of FXRP to deposit (UBA, 6 decimals)

@@ -4,24 +4,24 @@ package attester
 // This is part of Layer 5 (Verification & Audit) of the Aegis architecture.
 //
 // The FDCAttestor is used by the PositionComputer to:
-//   - Verify XRPL payment attestations via FDC
-//   - Verify EVM transaction attestations via FDC
-//   - Verify address validity attestations via FDC
-//   - Feed verified external state back into the position computation
+// - Verify XRPL payment attestations via FDC
+// - Verify EVM transaction attestations via FDC
+// - Verify address validity attestations via FDC
+// - Feed verified external state back into the position computation
 //
 // FDC Attestation Flow:
-//   1. Prepare attestation request (attestationType, sourceId, requestBody)
-//   2. Submit request to FDC verifier (off-chain) to get abiEncodedRequest
-//   3. Submit abiEncodedRequest to FdcHub on-chain (with fee)
-//   4. Wait for voting round to finalize (~180 seconds)
-//   5. Retrieve proof from DA Layer (off-chain)
-//   6. Verify proof on-chain via FdcVerification contract
+// 1. Prepare attestation request (attestationType, sourceId, requestBody)
+// 2. Submit request to FDC verifier (off-chain) to get abiEncodedRequest
+// 3. Submit abiEncodedRequest to FdcHub on-chain (with fee)
+// 4. Wait for voting round to finalize (~180 seconds)
+// 5. Retrieve proof from DA Layer (off-chain)
+// 6. Verify proof on-chain via FdcVerification contract
 //
 // Key FDC concepts:
-//   - AttestationType: "Payment", "EVMTransaction", "AddressValidity"
-//   - SourceId: "testXRP" (Coston2 XRPL), "testETH" (Coston2 EVM)
-//   - VotingRound: The round in which the attestation is processed
-//   - MerkleProof: The proof that the attestation is included in the Merkle tree
+// - AttestationType: "Payment", "EVMTransaction", "AddressValidity
+// - SourceId: "testXRP" (Coston2 XRPL), "testETH" (Coston2 EVM)
+// - VotingRound: The round in which the attestation is processed
+// - MerkleProof: The proof that the attestation is included in the Merkle tree
 
 import (
 	"encoding/hex"
@@ -229,7 +229,7 @@ func (fa *FDCAttestor) SubmitToVerifier(request *VerifierRequest, attestationTyp
 }
 
 // RequestPaymentAttestation performs the full Payment attestation flow:
-// prepare request -> submit to verifier -> (on-chain submission deferred to Task 8)
+// prepare request -> submit to verifier -> (on-chain submission deferred to )
 func (fa *FDCAttestor) RequestPaymentAttestation(transactionID string, sourceID SourceID) (*AttestationResult, error) {
 	// Step 1: Prepare the request
 	request, err := fa.PreparePaymentRequest(transactionID, sourceID)
@@ -245,7 +245,7 @@ func (fa *FDCAttestor) RequestPaymentAttestation(transactionID string, sourceID 
 
 	// Step 3: Create the attestation result
 	// Note: The on-chain submission (FdcHub.requestAttestation) and proof retrieval
-	// will be implemented when the FCC extension is registered (Task 8).
+	// will be implemented when the FCC extension is registered.
 	result := &AttestationResult{
 		AttestationType: AttestationTypePayment,
 		SourceID:        sourceID,

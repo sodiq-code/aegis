@@ -4,8 +4,6 @@
  * Step-by-step deposit flow for depositing FXRP into the Aegis vault.
  * Simulates XRPL wallet sign-in via Xaman, FXRP minting, vault deposit,
  * and FDC attestation confirming the XRPL payment.
- *
- * Demo Script (0:30–1:15): "One signature, one on-chain deposit, fully attested."
  */
 
 'use client';

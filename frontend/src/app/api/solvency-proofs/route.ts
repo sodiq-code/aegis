@@ -6,7 +6,6 @@
  *
  * Coston2 limits eth_getLogs to 30 blocks per request, so we scan in chunks.
  *
- * Task 22 (Day 22): Auditor can request and verify a solvency attestation.
  */
 
 import { NextResponse } from 'next/server';
@@ -76,7 +75,7 @@ async function getCurrentVotingRound(): Promise<number> {
 // Verified on-chain event topic for SolvencyProofPublished
 const SOLVENCY_PROOF_TOPIC = '0x6cd2dab55978f0a59cda7b61611abc0e4edf4c44d09e857d7d33de669273be60';
 
-// Known M3 checkpoint data (verified on-chain)
+// Known on-chain data (verified)
 const KNOWN_M3_TX_HASH = '0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481';
 const KNOWN_M3_BLOCK = 33565198;
 
@@ -223,7 +222,7 @@ export async function GET() {
     }
 
     // Scan for on-chain proof logs from the known activity area
-    // Scan M3 checkpoint ±30 blocks (this is where the real proofs are)
+    // Scan the known proof block ±30 blocks (this is where the real proofs are)
     const onChainLogs = await getSolvencyProofLogs(
       KNOWN_M3_BLOCK - 30,
       KNOWN_M3_BLOCK + 30
@@ -281,7 +280,7 @@ export async function GET() {
       }
     }
 
-    // If no on-chain proofs found, use the known M3 checkpoint as fallback
+    // If no on-chain proofs found, use the known on-chain data as fallback
     if (proofs.length === 0) {
       proofs.push({
         merkleRoot: currentMerkleRoot || '0x93041e047f6688a8bf87014abc061c9650a11659e2efb1f0cedc2ce75dc9c173',

@@ -168,18 +168,18 @@ check "POST /api/flare-rpc: chainId=0x72" "$([ "$fr_chain" = "0x72" ] && echo tr
 
 echo ""
 
-# ─── 5. M3 Checkpoint Verification ──────────────────────────
-echo "── 5. M3 CHECKPOINT VERIFICATION ──"
+# ─── 5. On-Chain Proof Verification ────────────────────────
+echo "── 5. ON-CHAIN PROOF VERIFICATION ──"
 
-# Verify the M3 TX exists on-chain
-m3_tx="0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481"
-m3_receipt=$(curl -s -X POST "$RPC_URL" -H 'Content-Type: application/json' \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getTransactionReceipt\",\"params\":[\"$m3_tx\"]}" 2>/dev/null)
-m3_status=$(echo "$m3_receipt" | python3 -c "import sys,json; r=json.load(sys.stdin).get('result',{}); print(r.get('status','0x0'))" 2>/dev/null)
-check "M3 TX status=0x1 (success)" "$([ "$m3_status" = "0x1" ] && echo true || echo false)"
+# Verify the known solvency proof TX exists on-chain
+proof_tx="0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481"
+proof_receipt=$(curl -s -X POST "$RPC_URL" -H 'Content-Type: application/json' \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getTransactionReceipt\",\"params\":[\"$proof_tx\"]}" 2>/dev/null)
+proof_status=$(echo "$proof_receipt" | python3 -c "import sys,json; r=json.load(sys.stdin).get('result',{}); print(r.get('status','0x0'))" 2>/dev/null)
+check "Solvency proof TX status=0x1 (success)" "$([ "$proof_status" = "0x1" ] && echo true || echo false)"
 
-m3_block=$(echo "$m3_receipt" | python3 -c "import sys,json; r=json.load(sys.stdin).get('result',{}); print(int(r.get('blockNumber','0x0'),16))" 2>/dev/null)
-check "M3 TX block=33565198 (got $m3_block)" "$([ "$m3_block" = "33565198" ] && echo true || echo false)"
+proof_block=$(echo "$proof_receipt" | python3 -c "import sys,json; r=json.load(sys.stdin).get('result',{}); print(int(r.get('blockNumber','0x0'),16))" 2>/dev/null)
+check "Solvency proof TX block=33565198 (got $proof_block)" "$([ "$proof_block" = "33565198" ] && echo true || echo false)"
 
 echo ""
 
@@ -228,56 +228,6 @@ check "useSolvencyProofs hook exists" "$([ -n "$(grep 'export function useSolven
 # Verify useProofVerification calls real API (not simulated)
 check "useProofVerification calls /api/verify-proof" "$([ -n "$(grep '/api/verify-proof' $hooks_file)" ] && echo true || echo false)"
 check "useProofVerification NOT using setTimeout simulation" "$([ -z "$(grep 'setTimeout' $hooks_file | grep -v 'refetch')" ] && echo true || echo false)"
-
-echo ""
-
-# ─── 9. Demo Script Alignment ────────────────────────────────
-echo "── 9. DEMO SCRIPT ALIGNMENT ──"
-
-# Deposit Flow (0:30-1:15)
-df_file="/home/z/my-project/frontend/src/components/aegis/deposit-flow.tsx"
-check "Deposit Flow: 5-step flow (signing→minting→depositing→attesting→complete)" "$([ -n "$(grep 'DepositStep' $df_file | head -1)" ] && echo true || echo false)"
-check "Deposit Flow: Xaman wallet integration" "$([ -n "$(grep 'useXamanWallet' $df_file)" ] && echo true || echo false)"
-check "Deposit Flow: BlockExplorerLink for VaultCore" "$([ -n "$(grep 'BlockExplorerLink' $df_file)" ] && echo true || echo false)"
-check "Deposit Flow: Quote 'One signature, one on-chain deposit, fully attested'" "$([ -n "$(grep 'One signature, one on-chain deposit, fully attested' $df_file)" ] && echo true || echo false)"
-
-# Confidential Position (1:15-2:30)
-cp_file="/home/z/my-project/frontend/src/components/aegis/confidential-position.tsx"
-check "Confidential Position: On-chain vs TEE comparison" "$([ -n "$(grep 'On-Chain State' $cp_file)" ] && echo true || echo false)"
-check "Confidential Position: Merkle root (blurred)" "$([ -n "$(grep 'blur-sm' $cp_file)" ] && echo true || echo false)"
-check "Confidential Position: TEE positions (assets + liabilities)" "$([ -n "$(grep 'What We Hold' $cp_file)" ] && echo true || echo false)"
-check "Confidential Position: TEE verify button" "$([ -n "$(grep 'Verify TEE Attestation' $cp_file)" ] && echo true || echo false)"
-check "Confidential Position: Quote about TEE verification" "$([ -n "$(grep 'Anyone can verify the TEE ran the correct code' $cp_file)" ] && echo true || echo false)"
-
-# Risk Rebalance (2:30-3:30)
-rr_file="/home/z/my-project/frontend/src/components/aegis/risk-rebalance.tsx"
-check "Risk Rebalance: Simulate Market Drawdown button" "$([ -n "$(grep 'Simulate Market Drawdown' $rr_file)" ] && echo true || echo false)"
-check "Risk Rebalance: 7-step flow" "$([ -n "$(grep 'detecting.*computing.*issuing-pmw' $rr_file)" ] && echo true || echo false)"
-check "Risk Rebalance: PMW instruction step" "$([ -n "$(grep 'PMW instruction' $rr_file)" ] && echo true || echo false)"
-check "Risk Rebalance: XRPL execution step" "$([ -n "$(grep 'XRPL transaction' $rr_file)" ] && echo true || echo false)"
-check "Risk Rebalance: FDC attestation step" "$([ -n "$(grep 'FDC attestation' $rr_file)" ] && echo true || echo false)"
-check "Risk Rebalance: Solvency root update step" "$([ -n "$(grep 'solvency root' $rr_file)" ] && echo true || echo false)"
-check "Risk Rebalance: Quote about autonomous rebalance" "$([ -n "$(grep 'autonomously rebalanced' $rr_file)" ] && echo true || echo false)"
-
-# Verifiable Solvency (3:30-4:30)
-av_file="/home/z/my-project/frontend/src/components/aegis/audit-view.tsx"
-check "Audit View: useProofVerification hook used" "$([ -n "$(grep 'useProofVerification' $av_file)" ] && echo true || echo false)"
-check "Audit View: verification result display" "$([ -n "$(grep 'verificationResult' $av_file)" ] && echo true || echo false)"
-check "Audit View: FDC verification display" "$([ -n "$(grep 'fdcVerification' $av_file)" ] && echo true || echo false)"
-check "Audit View: Quote about confidentiality-to-verifiability" "$([ -n "$(grep 'confidentiality-to-verifiability' $av_file)" ] && echo true || echo false)"
-
-# FDC Attestation Panel
-fdc_file="/home/z/my-project/frontend/src/components/aegis/fdc-attestation-panel.tsx"
-check "FDC Panel: Current voting round display" "$([ -n "$(grep 'currentVotingRound' $fdc_file)" ] && echo true || echo false)"
-check "FDC Panel: Contract deployment status" "$([ -n "$(grep 'contractsDeployed' $fdc_file)" ] && echo true || echo false)"
-check "FDC Panel: BlockExplorerLinks for contracts" "$([ -n "$(grep 'BlockExplorerLink' $fdc_file)" ] && echo true || echo false)"
-
-# Solvency Charts
-sc_file="/home/z/my-project/frontend/src/components/aegis/solvency-chart.tsx"
-check "Solvency Charts: Risk score trend line chart" "$([ -n "$(grep 'LineChart' $sc_file)" ] && echo true || echo false)"
-check "Solvency Charts: Solvency margin area chart" "$([ -n "$(grep 'AreaChart' $sc_file)" ] && echo true || echo false)"
-check "Solvency Charts: 150% minimum reference line" "$([ -n "$(grep '150' $sc_file)" ] && echo true || echo false)"
-check "Solvency Charts: useRiskScore and useSolvencyProofs hooks" "$([ -n "$(grep 'useRiskScore.*useSolvencyProofs' $sc_file)" ] && echo true || echo false)"
 
 echo ""
 

@@ -2,7 +2,7 @@
 """
 FDC Attestation Validation Script for Aegis
 ============================================
-Task 3: FDC integration spike - request XRPPayment attestation; verify proof.
+FDC integration spike - request XRPPayment attestation; verify proof.
 
 This script validates the FDC attestation flow on Coston2:
 1. Verify FDC contracts are deployed and accessible on Coston2
@@ -154,7 +154,7 @@ def step4_test_verifier_api() -> bool:
     print("="*70)
     
     # The verifier URL format: /verifier/{sourceId}/{attestationType}/prepareRequest
-    # For XRPL testnet: sourceId = "xrp"
+    # For XRPL testnet: sourceId = "xrp
     url = f"{FDC_VERIFIER_URL}/verifier/xrp/Payment/prepareRequest"
     
     att_type_hex = "0x" + to_hex_string_padded("Payment")
@@ -284,7 +284,7 @@ def step6_verify_merkle_root(w3: Web3, voting_round: int) -> bool:
 def main():
     """Run the full FDC attestation validation flow."""
     print("="*70)
-    print("AEGIS FDC ATTESTATION VALIDATION — TASK 3")
+    print("AEGIS FDC ATTESTATION VALIDATION — ")
     print("="*70)
     print(f"Network: Coston2 (Flare Testnet)")
     print(f"RPC: {COSTON2_RPC}")
@@ -354,10 +354,10 @@ def main():
         status = "PASS" if result else "FAIL"
         print(f"  [{status}] {name}")
     
-    print(f"\n  {passed}/{total} checks passed")
+    print(f"\n {passed}/{total} checks passed")
     
     if results["current_round"] > 0:
-        print(f"\n  Current voting round: {results['current_round']}")
+        print(f"\n Current voting round: {results['current_round']}")
         print(f"  Request fee: {results['request_fee']} wei")
     
     # Acceptance criterion: FDC attestation retrieved and verified from the extension
@@ -370,11 +370,11 @@ def main():
         results["verifier_reachable"]
     )
     
-    print(f"\n  ACCEPTANCE CRITERION: FDC attestation retrieved and verified")
+    print(f"\n ACCEPTANCE CRITERION: FDC attestation retrieved and verified")
     print(f"  Result: {'MET' if acceptance else 'NOT MET'}")
     
     if acceptance:
-        print("\n  FDC integration spike COMPLETE.")
+        print("\n FDC integration spike COMPLETE.")
         print("  The FDC attestation flow is validated on Coston2:")
         print("  - FDC contracts are deployed and accessible on Coston2")
         print("  - FdcHub, FdcVerification, FlareSystemsManager all reachable")

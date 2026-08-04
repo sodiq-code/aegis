@@ -162,7 +162,7 @@ node test/sdk-verify.js
 
 **Note on FDC v1 vs v2**: Aegis uses FDC v1 (FdcHub + FdcVerification) for all attestation operations. FDC v2 contracts are available on Coston2 but not currently integrated. The FDCAttestor contract only references FdcHub and FdcVerification.
 
-## Songbird Deployment (Post-Hackathon)
+## Songbird Deployment
 
 Songbird deployment requires FCC and PMW to be available on the Songbird canary network. The process is identical to Coston2 deployment but with different RPC URL and contract addresses:
 
@@ -176,7 +176,7 @@ docker compose -f ../docker-compose.siblings.yaml up --build
 
 **Status**: FCC and PMW are expected to be available on Songbird after governance approval. Monitor Flare governance proposals for availability.
 
-## Mainnet Deployment (Post-Hackathon)
+## Mainnet Deployment
 
 Mainnet deployment requires:
 1. External security audit (target: Trail of Bits or equivalent)
@@ -184,7 +184,7 @@ Mainnet deployment requires:
 3. Governance approval for Aegis contracts
 4. Institutional pilot with KYC/AML-compliant custodian
 
-**Timeline**: Month 1-2 post-hackathon for audit and Songbird deployment; Month 3 for Mainnet launch with first institutional customer.
+**Timeline**: External audit and Songbird deployment first, followed by Mainnet launch.
 
 ## Environment Variables
 
@@ -249,7 +249,7 @@ After deployment, verify each item using the commands shown:
 - [ ] **All 3 views display real on-chain data** -- Treasury, Policy, Audit views
 - [ ] **Foundry tests pass** -- `forge test --summary` should show 143 tests, 0 failures
 - [ ] **Go tests pass** -- `go test ./...` should show 13 packages passing
-- [ ] **M4 checkpoint passes** -- `python3 m4_checkpoint.py` should show 97/97 checks
+- [ ] **Deployment verification script passes** -- `bash scripts/verify-aegis.sh` should report all checks green
 
 ## Current Vault State (Live on Coston2)
 

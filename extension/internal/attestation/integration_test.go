@@ -21,8 +21,8 @@ import (
 // PositionComputer processes events → computes Merkle root →
 // SolvencyAttestor publishes proof → proof is verifiable.
 //
-// This is the core acceptance criterion for Task 9:
-// "SolvencyRoot published on-chain from extension."
+// This is the core acceptance criterion for 
+// "SolvencyRoot published on-chain from extension.
 func TestEndToEnd_PositionToSolvencyProof(t *testing.T) {
         // Step 1: Initialize PositionComputer
         pc := position.NewPositionComputer(position.DefaultPositionComputerConfig())
@@ -131,7 +131,7 @@ func TestEndToEnd_PositionToSolvencyProof(t *testing.T) {
                 t.Fatalf("Verification proof Merkle root mismatch")
         }
 
-        t.Logf("Task 9 acceptance criterion MET: SolvencyRoot published from extension")
+        t.Logf("Acceptance criterion MET: SolvencyRoot published from extension")
 }
 
 // TestEndToEnd_MerkleProofVerification tests the full Merkle proof verification flow

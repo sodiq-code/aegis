@@ -12,12 +12,12 @@ import "./interfaces/fassets/IFtsoV2.sol";
 
 /// @title VaultCore
 /// @notice Core vault contract for Aegis — manages FXRP deposits, withdrawals,
-///         and collateral tracking using Flare FAssets and FTSO price feeds.
-/// @dev Implements the report-specified API (Section 9.4.5):
-///      depositFXRP(amount, policyId), withdraw(amount), emergencyExit(),
-///      balanceOf(user), policyOf(user).
-///      Uses FlareContractRegistry for dynamic resolution of FAssets and FTSO addresses.
-///      Task 17 (Day 17): Added circuit breaker, safe-state logic, and emergency mode auto-trigger.
+/// and collateral tracking using Flare FAssets and FTSO price feeds.
+/// @dev Implements the vault API:
+/// depositFXRP(amount, policyId), withdraw(amount), emergencyExit(),
+/// balanceOf(user), policyOf(user).
+/// Uses FlareContractRegistry for dynamic resolution of FAssets and FTSO addresses.
+/// Added circuit breaker, safe-state logic, and emergency mode auto-trigger.
 contract VaultCore is IVaultCore {
     // --- State Variables ---
 
@@ -47,9 +47,9 @@ contract VaultCore is IVaultCore {
     /// @notice Whether the vault is in emergency mode
     bool private _emergencyMode;
 
-    /// @notice Whether the vault is in safe state (Task 17)
-    /// Per the report's Section 9.3.12: "If the TEE fails or becomes unavailable,
-    /// the vault enters a safe state: no new positions are taken, no rebalances occur."
+    /// @notice Whether the vault is in safe state
+    /// If the TEE fails or becomes unavailable,
+    /// the vault enters a safe state: no new positions are taken, no rebalances occur.
     bool private _safeState;
 
     /// @notice Reason for the current safe state or emergency mode
@@ -61,7 +61,7 @@ contract VaultCore is IVaultCore {
     /// @notice Timestamp when the emergency mode was entered
     uint256 private _emergencySince;
 
-    /// @notice Consecutive failure count for circuit breaker (Task 17)
+    /// @notice Consecutive failure count for circuit breaker
     uint256 private _consecutiveFails;
 
     /// @notice Maximum consecutive failures before auto-entering safe state
@@ -150,10 +150,10 @@ contract VaultCore is IVaultCore {
         });
     }
 
-    // --- Report-Specified API (Section 9.4.5) ---
+    // --- Vault API ---
 
     /// @inheritdoc IVaultCore
-    /// @dev Task 17: Also blocked in safe state — per report: "no new positions are taken"
+    /// @dev Also blocked in safe state — no new positions are taken
     function depositFXRP(uint256 amount, uint256 policyId) external override notInEmergency notInSafeState returns (uint256) {
         require(amount >= config.minDepositAmount, "VaultCore: below minimum deposit");
         require(amount <= config.maxDepositAmount, "VaultCore: exceeds maximum deposit");
@@ -202,7 +202,7 @@ contract VaultCore is IVaultCore {
     }
 
     /// @inheritdoc IVaultCore
-    /// @dev Task 17: Withdrawals allowed in safe state — per report: "user can withdraw"
+    /// @dev Withdrawals allowed in safe state — user can withdraw
     function withdraw(uint256 amount) external override {
         require(amount > 0, "VaultCore: zero amount");
         require(_depositorBalances[msg.sender] >= amount, "VaultCore: insufficient balance");
@@ -376,11 +376,11 @@ contract VaultCore is IVaultCore {
         return _emergencyMode;
     }
 
-    // --- Task 17: Safe State and Circuit Breaker Functions ---
+    // --- Safe State and Circuit Breaker Functions ---
 
-    /// @notice Enter safe state (Task 17)
-    /// @dev Per the report's Section 9.3.12: "the vault enters a safe state:
-    ///      no new positions are taken, no rebalances occur"
+    /// @notice Enter safe state
+    /// @dev the vault enters a safe state:
+    /// no new positions are taken, no rebalances occur
     /// @param reason The reason for entering safe state
     function enterSafeState(string calldata reason) external onlyVerifier {
         if (!_safeState) {
@@ -391,7 +391,7 @@ contract VaultCore is IVaultCore {
         }
     }
 
-    /// @notice Exit safe state (Task 17)
+    /// @notice Exit safe state
     /// @dev Only callable when all subsystems are healthy
     function exitSafeState() external onlyVerifier {
         if (_safeState) {
@@ -423,7 +423,7 @@ contract VaultCore is IVaultCore {
         return _emergencySince;
     }
 
-    /// @notice Record a failure for circuit breaker (Task 17)
+    /// @notice Record a failure for circuit breaker
     /// @dev Automatically enters safe state when consecutive failures exceed threshold
     /// @param reason The reason for the failure
     function recordFailure(string calldata reason) external onlyVerifier {
@@ -438,7 +438,7 @@ contract VaultCore is IVaultCore {
         emit FailureRecorded(msg.sender, _consecutiveFails, reason, block.timestamp);
     }
 
-    /// @notice Reset consecutive failure count (Task 17)
+    /// @notice Reset consecutive failure count
     function resetFailures() external onlyVerifier {
         _consecutiveFails = 0;
     }
@@ -459,9 +459,9 @@ contract VaultCore is IVaultCore {
         return _circuitBreakerThreshold;
     }
 
-    /// @notice Trigger emergency mode from solvency breach (Task 17)
-    /// @dev Per the report's Section 9.5.7: "the vault fails safe (no new positions)
-    ///      if the TEE is unavailable; users can always exit via emergencyExit"
+    /// @notice Trigger emergency mode from solvency breach
+    /// @dev the vault fails safe (no new positions)
+    /// if the TEE is unavailable; users can always exit via emergencyExit
     function triggerEmergencyFromSolvencyBreach(string calldata reason) external onlyVerifier {
         if (!_emergencyMode) {
             _emergencyMode = true;
@@ -471,7 +471,7 @@ contract VaultCore is IVaultCore {
         }
     }
 
-    // --- Task 17: Events ---
+    // --- Events ---
 
     /// @notice Emitted when the vault enters safe state
     event SafeStateEntered(address indexed triggeredBy, string reason, uint256 timestamp);

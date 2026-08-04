@@ -7,7 +7,6 @@
  *   2. Current proof status check via SolvencyRoot.getCurrentSolvencyProof()
  *   3. FDC attestation verification via FdcVerification.verifyPayment()
  *
- * Task 22 (Day 22): Auditor can request and verify a solvency attestation.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

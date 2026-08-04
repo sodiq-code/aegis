@@ -1,18 +1,18 @@
 // Package fdc implements the FDC (Flare Data Connector) client for the Aegis vault system.
 //
-// Task 15 (Day 15): FDC integration: attestation of XRPL payment + Hyperliquid state.
+// FDC integration: attestation of XRPL payment + Hyperliquid state.
 // Acceptance criterion: External state attested and fed back to PositionComputer.
 //
 // The FDCPositionBridge is the critical integration component that:
-//   1. Takes attested XRPL payment data from the FDCClient
-//   2. Converts it to PositionComputer's ExternalState format
-//   3. Feeds it into the PositionComputer's UpdateExternalState method
-//   4. Takes attested Hyperliquid state from the FDCClient
-//   5. Converts it to PositionComputer's ExternalState format
-//   6. Feeds it into the PositionComputer's UpdateExternalState method
+// 1. Takes attested XRPL payment data from the FDCClient
+// 2. Converts it to PositionComputer's ExternalState format
+// 3. Feeds it into the PositionComputer's UpdateExternalState method
+// 4. Takes attested Hyperliquid state from the FDCClient
+// 5. Converts it to PositionComputer's ExternalState format
+// 6. Feeds it into the PositionComputer's UpdateExternalState method
 //
 // This is the "FDC attestation responses → PositionComputer (TEE)" data flow
-// described in the report's Section 9.4.3.
+// described in the vault specification
 package fdc
 
 import (
@@ -50,7 +50,7 @@ func DefaultFDCPositionBridgeConfig() FDCPositionBridgeConfig {
 
 // FDCPositionBridge wires FDC-attested external state to the PositionComputer.
 //
-// Per the report's Section 9.4.3 (Data flow diagram):
+// 
 //
 //	Inbound data flows: (2) FDC attestation responses → PositionComputer (TEE)
 //
@@ -59,8 +59,8 @@ func DefaultFDCPositionBridgeConfig() FDCPositionBridgeConfig {
 // attestation data would be verified but not used in the vault state.
 //
 // The bridge converts:
-//   - XRPPaymentAttestation → position.ExternalState (chain=XRPL)
-//   - HyperliquidStateAttestation → position.ExternalState (chain=HYPERLIQUID)
+// - XRPPaymentAttestation → position.ExternalState (chain=XRPL)
+// - HyperliquidStateAttestation → position.ExternalState (chain=HYPERLIQUID)
 type FDCPositionBridge struct {
 	config     FDCPositionBridgeConfig
 	fdcClient  *FDCClient
@@ -108,12 +108,12 @@ func (b *FDCPositionBridge) IsConnected() bool {
 // AttestAndFeedXRPLPayment performs the full XRPL payment attestation flow
 // and feeds the result into the PositionComputer.
 //
-// This is the primary integration method for Task 15:
-//   1. Request XRPPayment attestation via FDC
-//   2. Convert attested data to PositionComputer's ExternalState
-//   3. Feed ExternalState into PositionComputer
+// This is the primary integration method for 
+// 1. Request XRPPayment attestation via FDC
+// 2. Convert attested data to PositionComputer's ExternalState
+// 3. Feed ExternalState into PositionComputer
 //
-// Per the report's Section 9.4.1:
+// 
 //
 //	FDC Attestations: XRPPayment (XRPL transfers settled)
 func (b *FDCPositionBridge) AttestAndFeedXRPLPayment(ctx context.Context, transactionID string) (*position.ExternalState, error) {
@@ -175,7 +175,7 @@ func (b *FDCPositionBridge) AttestAndFeedXRPLPaymentFull(ctx context.Context, tr
 // AttestAndFeedHyperliquidState performs the Hyperliquid state attestation flow
 // and feeds the result into the PositionComputer.
 //
-// Per the report's Section 9.4.1:
+// 
 //
 //	PMW Layer controls wallets on Hyperliquid (open/close hedges)
 func (b *FDCPositionBridge) AttestAndFeedHyperliquidState(ctx context.Context, accountAddress string) (*position.ExternalState, error) {

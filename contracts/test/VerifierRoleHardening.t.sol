@@ -6,9 +6,9 @@ import "../src/VerifierRole.sol";
 import "../src/interfaces/vault/IVerifierRole.sol";
 
 /// @title VerifierRoleHardening
-/// @notice Task 29 hardening: edge-case and fuzz tests for VerifierRole.
-///         Covers role hierarchy, TEE identity edge cases, signature verification,
-///         access control, and revocation invariants.
+/// @notice hardening: edge-case and fuzz tests for VerifierRole.
+/// Covers role hierarchy, TEE identity edge cases, signature verification,
+/// access control, and revocation invariants.
 contract VerifierRoleHardening is Test {
     VerifierRole public verifierRole;
 

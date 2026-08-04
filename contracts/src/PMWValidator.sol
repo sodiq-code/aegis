@@ -8,7 +8,7 @@ import { IExtensionManagerFacet } from "./interfaces/pmw/IExtensionManagerFacet.
 
 /// @title PMWValidator
 /// @notice Validates PMW on Coston2 by testing XRPL wallet creation, instruction, and signing.
-/// Task 2 acceptance criterion: One PMW-mediated XRPL transaction confirmed from a Flare contract.
+/// acceptance criterion: One PMW-mediated XRPL transaction confirmed from a Flare contract.
 contract PMWValidator {
     /// @notice The FCC diamond address on Coston2.
     address public immutable FCC_DIAMOND;

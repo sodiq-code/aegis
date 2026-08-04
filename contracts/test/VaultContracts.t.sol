@@ -9,8 +9,8 @@ import "../src/InstructionSender.sol";
 
 /// @title VaultContractsTest
 /// @notice Comprehensive tests for all 5 vault contracts (VerifierRole, PolicyRegistry,
-///         SolvencyRoot, InstructionSender, VaultCore) on local anvil.
-///         Tests cover the report-specified API (Section 9.4.5) and extended functionality.
+/// SolvencyRoot, InstructionSender, VaultCore) on local anvil.
+/// Tests cover the vault API and extended functionality.
 contract VaultContractsTest is Test {
     // --- Contracts ---
     VerifierRole public verifierRole;
@@ -156,14 +156,14 @@ contract VaultContractsTest is Test {
         assertEq(policy.policyId, 1);
         assertTrue(policy.isActive);
         assertEq(uint(policy.riskLevel), uint(IPolicyRegistry.RiskLevel.LOW));
-        // Report-specified fields
+        // Vault fields
         assertEq(policy.maxDrawdownBps, 1500);  // 15% max drawdown
         assertEq(policy.maxSingleExposureBps, 4000); // 40% max single exposure
         assertEq(policy.hedgeThresholdBps, 800); // 8% hedge threshold
     }
 
     function test_PolicyRegistry_ReportSpecifiedFields() public view {
-        // Verify the default Conservative policy has report-specified fields
+        // Verify the default Conservative policy has vault fields
         IPolicyRegistry.Policy memory policy = policyRegistry.getPolicy(1);
         assertEq(policy.maxDrawdownBps, 1500);
         assertEq(policy.maxSingleExposureBps, 4000);
@@ -188,7 +188,7 @@ contract VaultContractsTest is Test {
     }
 
     function test_PolicyRegistry_SetPolicy() public {
-        // Test the report-specified setPolicy function
+        // Test the vault setPolicy function
         address[] memory assets = new address[](1);
         assets[0] = makeAddr("new-asset");
 
@@ -284,7 +284,7 @@ contract VaultContractsTest is Test {
     }
 
     function test_SolvencyRoot_PublishRoot() public {
-        // Test the report-specified publishRoot function
+        // Test the vault publishRoot function
         bytes32 merkleRoot = keccak256("test-merkle-root");
         vm.prank(verifier);
         solvencyRoot.publishRoot(merkleRoot, 5000); // 50% surplus
@@ -296,7 +296,7 @@ contract VaultContractsTest is Test {
     }
 
     function test_SolvencyRoot_VerifySolvency() public {
-        // Test the report-specified verifySolvency function
+        // Test the vault verifySolvency function
         bytes32 leaf = keccak256(abi.encodePacked(uint256(1), depositor1, uint256(100_000_000), uint256(50000)));
         bytes32 root = leaf;
         bytes32[] memory proof = new bytes32[](0);
@@ -517,7 +517,7 @@ contract VaultContractsTest is Test {
     }
 
     function test_InstructionSender_SendInstruction() public {
-        // Test the report-specified sendInstruction function
+        // Test the vault sendInstruction function
         bytes memory payload = abi.encode(
             IInstructionSender.InstructionType.PAYMENT,
             uint256(1),
@@ -532,7 +532,7 @@ contract VaultContractsTest is Test {
     }
 
     function test_InstructionSender_GetResponse() public {
-        // Test the report-specified getResponse function
+        // Test the vault getResponse function
         bytes32 instrId = keccak256("test-instruction");
         bytes memory response = abi.encode(uint256(1), "success");
         vm.prank(verifier);

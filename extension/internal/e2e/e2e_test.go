@@ -1,31 +1,31 @@
 // Package e2e implements the end-to-end integration test for the Aegis vault system.
 //
-// Task 16 (Day 16): End-to-end flow: deposit → risk event → PMW rebalance → solvency attestation.
+// End-to-end flow: deposit → risk event → PMW rebalance → solvency attestation.
 // Acceptance criterion: Full flow runs on Coston2; recorded as demo seed.
 //
-// This test verifies the complete end-to-end flow described in the report's Section 9.4.2:
+// This test verifies the complete end-to-end flow 
 //
-//   Deposit → RiskAgent observe → RiskAgent score → RiskAgent decide →
-//   ActionExecutor act (PMW rebalance) → SolvencyAttestor attest →
-//   OnChainPublisher publish → SolvencyRoot on-chain
+// Deposit → RiskAgent observe → RiskAgent score → RiskAgent decide →
+// ActionExecutor act (PMW rebalance) → SolvencyAttestor attest →
+// OnChainPublisher publish → SolvencyRoot on-chain
 //
 // The flow is:
-//   1. DEPOSIT: PositionComputer processes deposit events and rebuilds vault state
-//   2. RISK EVENT: RiskAgent observes FTSO price drop → scores high risk → decides to rebalance
-//   3. PMW REBALANCE: ActionExecutor executes rebalance via PMW (mock on Coston2)
-//   4. SOLVENCY ATTESTATION: SolvencyAttestor computes Merkle root + publishes on-chain
+// 1. DEPOSIT: PositionComputer processes deposit events and rebuilds vault state
+// 2. RISK EVENT: RiskAgent observes FTSO price drop → scores high risk → decides to rebalance
+// 3. PMW REBALANCE: ActionExecutor executes rebalance via PMW (mock on Coston2)
+// 4. SOLVENCY ATTESTATION: SolvencyAttestor computes Merkle root + publishes on-chain
 //
-// Per the report's Section 9.4.2 (Sequence diagram — risk rebalance flow):
+// 
 //
-//   RiskAgent → propose action (move FXRP to XRPL) → InstructionSender
-//   → policy check (on-chain) → instruction → PMW → sign & submit → XRPL
+// RiskAgent → propose action (move FXRP to XRPL) → InstructionSender
+// → policy check (on-chain) → instruction → PMW → sign & submit → XRPL
 //
-// Per the report's Section 9.4.3 (Data flow diagram):
+// 
 //
-//   Inbound: (1) FTSO price feeds → PositionComputer (TEE)
-//   Inbound: (2) FDC attestation responses → PositionComputer (TEE)
-//   Outbound: (3) Solvency proof → SolvencyRoot (on-chain)
-//   Outbound: (4) PMW instruction → XRPL (via PMW Diamond)
+// Inbound: (1) FTSO price feeds → PositionComputer (TEE)
+// Inbound: (2) FDC attestation responses → PositionComputer (TEE)
+// Outbound: (3) Solvency proof → SolvencyRoot (on-chain)
+// Outbound: (4) PMW instruction → XRPL (via PMW Diamond)
 package e2e
 
 import (
@@ -94,13 +94,13 @@ func recordStep(step int, name string, status string, durationMs int64, data int
 // TestE2E_DepositRiskRebalanceAttestation verifies the full end-to-end flow:
 // deposit → risk event → PMW rebalance → solvency attestation.
 //
-// This is the acceptance criterion for Task 16:
-// "Full flow runs on Coston2; recorded as demo seed."
+// This is the acceptance criterion for 
+// "Full flow runs on Coston2; recorded as demo seed.
 func TestE2E_DepositRiskRebalanceAttestation(t *testing.T) {
         flowStart := time.Now()
         t.Log("╔══════════════════════════════════════════════════════════════════╗")
-        t.Log("║  AEGIS — Task 16: End-to-End Flow                              ║")
-        t.Log("║  deposit → risk event → PMW rebalance → solvency attestation   ║")
+        t.Log("║ AEGIS — End-to-End Flow ║")
+        t.Log("║ deposit → risk event → PMW rebalance → solvency attestation ║")
         t.Log("╚══════════════════════════════════════════════════════════════════╝")
 
         // ─── Step 1: Initialize all components ──────────────────────────────
@@ -407,7 +407,7 @@ func TestE2E_DepositRiskRebalanceAttestation(t *testing.T) {
         stepStart = time.Now()
         t.Log("\n=== Step 6: FDC ATTESTATION — Attest External State (XRPL + Hyperliquid) ===")
 
-        // Simulate FDC attestation of XRPL payment (from Task 15)
+        // Simulate FDC attestation of XRPL payment (from )
         xrplExternalState := &position.ExternalState{
                 Chain:         position.ExternalChainXRPL,
                 Address:       "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
@@ -549,7 +549,7 @@ func TestE2E_DepositRiskRebalanceAttestation(t *testing.T) {
         if err != nil {
                 t.Fatalf("Failed to serialize demo seed: %v", err)
         }
-        t.Logf("\n  📋 Demo Seed:\n%s", string(demoJSON))
+        t.Logf("\n 📋 Demo Seed:\n%s", string(demoJSON))
 
         recordStep(8, "COMPLETE — Verify Full Flow", "PASS", time.Since(stepStart).Milliseconds(), map[string]interface{}{
                 "totalDurationMs":    demoSeed.TotalDurMs,
@@ -560,8 +560,8 @@ func TestE2E_DepositRiskRebalanceAttestation(t *testing.T) {
         }, nil)
 
         t.Log("\n╔══════════════════════════════════════════════════════════════════╗")
-        t.Log("║  TASK 16 — END-TO-END FLOW COMPLETE ✓                          ║")
-        t.Log("║  deposit → risk event → PMW rebalance → solvency attestation   ║")
+        t.Log("║ END-TO-END FLOW COMPLETE ✓ ║")
+        t.Log("║ deposit → risk event → PMW rebalance → solvency attestation ║")
         t.Log("╚══════════════════════════════════════════════════════════════════╝")
 }
 

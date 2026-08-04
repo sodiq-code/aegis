@@ -5,8 +5,6 @@
  * Shows AI risk agent detecting threshold breach, computing rebalance action,
  * issuing PMW instruction, PMW signing flow, XRPL transaction execution,
  * FDC attestation, and updated solvency root.
- *
- * Demo Script (2:30–3:30): "An AI agent inside a TEE just autonomously rebalanced
  * a private vault across chains, and every step is verifiable."
  */
 

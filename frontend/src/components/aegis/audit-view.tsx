@@ -2,7 +2,7 @@
  * Audit View
  * 
  * Auditor-facing view for solvency proofs and verification tooling.
- * This is the "wow moment" of the demo — an auditor can verify
+ * An auditor can verify
  * the treasury is solvent without seeing any positions.
  * 
  * Production polish: skeleton loaders, error states, block explorer links,
@@ -99,7 +99,7 @@ export function AuditView() {
         </Card>
       )}
 
-      {/* The Wow Moment Card */}
+      {/* Verifiable Solvency Card */}
       <Card className="border-2 border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/50 to-transparent dark:from-emerald-950/30">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
