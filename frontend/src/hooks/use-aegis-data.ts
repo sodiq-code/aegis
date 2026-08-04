@@ -373,3 +373,104 @@ export function useProofVerification() {
 
   return { verifying, verified, verifyError, verifyProof, resetVerification };
 }
+
+// ─── Vault Events Hook ─────────────────────────────────────────
+
+interface VaultEvent {
+  type: string;
+  blockNumber: number;
+  transactionHash: string;
+  contract: string;
+  timestamp?: number;
+  details: Record<string, string>;
+}
+
+export function useVaultEvents(pollInterval = 60000) {
+  const [events, setEvents] = useState<VaultEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastFetched, setLastFetched] = useState<Date | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchData = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch events from the known activity area + recent blocks
+      const response = await fetch('/api/vault-events?range=all', { signal: controller.signal });
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const json = await response.json();
+      if (json.error) throw new Error(json.error);
+      setEvents(json.events || []);
+      setLastFetched(new Date());
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      const msg = err instanceof Error ? err.message : 'Failed to fetch vault events';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, pollInterval);
+    return () => {
+      clearInterval(interval);
+      abortRef.current?.abort();
+    };
+  }, [fetchData, pollInterval]);
+
+  return { events, loading, error, lastFetched, refetch: fetchData };
+}
+
+// ─── Solvency Proofs Hook ──────────────────────────────────────
+
+interface SolvencyProof {
+  merkleRoot: string;
+  surplusBps: number;
+  totalFxrpCollateral: number;
+  totalLiabilities: number;
+  collateralRatio: number;
+  timestamp: number;
+  votingRound: number;
+  attestor: string;
+  isValid: boolean;
+  blockNumber: number;
+  transactionHash: string;
+}
+
+export function useSolvencyProofs() {
+  const [proofs, setProofs] = useState<SolvencyProof[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastFetched, setLastFetched] = useState<Date | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/solvency-proofs');
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const json = await response.json();
+      if (json.error) throw new Error(json.error);
+      setProofs(json.proofs || []);
+      setLastFetched(new Date());
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to fetch proof history';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { proofs, loading, error, lastFetched, refetch: fetchData };
+}

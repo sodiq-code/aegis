@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
-import { useSolvencyData, useProofVerification } from '@/hooks/use-aegis-data';
+import { useSolvencyData, useProofVerification, useSolvencyProofs } from '@/hooks/use-aegis-data';
 import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import {
   FileCheck, CheckCircle2, AlertTriangle, Shield, Eye, EyeOff,
@@ -30,6 +30,7 @@ import { formatDistanceToNow } from 'date-fns';
 export function AuditView() {
   const { data: solvencyData, loading, error, lastFetched, refetch, requestAttestation } = useSolvencyData();
   const { verifying, verified, verifyError, verifyProof, resetVerification } = useProofVerification();
+  const { proofs, loading: proofsLoading } = useSolvencyProofs();
   const [showProofData, setShowProofData] = useState(false);
   const [attestationLoading, setAttestationLoading] = useState(false);
 
@@ -320,33 +321,61 @@ export function AuditView() {
           <CardDescription>Recent solvency attestation publications</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-0">
-            {[
-              { time: '2 min ago', txHash: '0xfb4eeb96d5a1c3c4b2a8f1e7d3c5b6a9fb4eeb96d5a1c3c4b2a8f1e7d3c5b6a9', block: 33565198, ratio: '140%', status: 'WARNING' },
-              { time: '1 hour ago', txHash: '0x4fc7c8d5a2b1e3f4c5d6a7b8e9f0a1b24fc7c8d5a2b1e3f4c5d6a7b8e9f0a1b2', block: 33564557, ratio: '140%', status: 'WARNING' },
-              { time: '3 hours ago', txHash: '0xa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', block: 33560000, ratio: '150%', status: 'HEALTHY' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between py-2.5 border-b last:border-0 hover:bg-muted/30 -mx-2 px-2 rounded transition-colors">
-                <div className="flex items-center gap-3">
-                  <FileCheck className={`h-4 w-4 shrink-0 ${item.status === 'HEALTHY' ? 'text-emerald-500' : 'text-yellow-500'}`} />
-                  <div>
-                    <p className="text-sm font-medium">Proof published</p>
-                    <p className="text-xs text-muted-foreground">
-                      TX: <BlockExplorerLink type="tx" value={item.txHash} /> &middot; Block: {item.block.toLocaleString()}
-                    </p>
+          {proofsLoading && proofs.length === 0 ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex items-center gap-3 py-2">
+                  <Skeleton className="h-4 w-4 rounded-full" />
+                  <div className="space-y-1 flex-1">
+                    <Skeleton className="h-4 w-36" />
+                    <Skeleton className="h-3 w-48" />
                   </div>
+                  <Skeleton className="h-5 w-12" />
                 </div>
-                <div className="text-right">
-                  <Badge variant="outline" className={`text-xs ${
-                    item.status === 'HEALTHY' ? 'text-emerald-600 border-emerald-300' : 'text-yellow-600 border-yellow-300'
-                  }`}>
-                    {item.ratio}
-                  </Badge>
-                  <p className="text-xs text-muted-foreground mt-1">{item.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : proofs.length > 0 ? (
+            <div className="space-y-0">
+              {proofs.map((proof, i) => {
+                const ratioPct = proof.collateralRatio > 100
+                  ? `${(proof.collateralRatio / 100).toFixed(0)}%`
+                  : `${proof.collateralRatio}%`;
+                const isHealthy = proof.collateralRatio >= 15000;
+                return (
+                  <div key={i} className="flex items-center justify-between py-2.5 border-b last:border-0 hover:bg-muted/30 -mx-2 px-2 rounded transition-colors">
+                    <div className="flex items-center gap-3">
+                      <FileCheck className={`h-4 w-4 shrink-0 ${isHealthy ? 'text-emerald-500' : 'text-yellow-500'}`} />
+                      <div>
+                        <p className="text-sm font-medium">Proof published</p>
+                        <p className="text-xs text-muted-foreground">
+                          TX: <BlockExplorerLink type="tx" value={proof.transactionHash} /> &middot; Block: {proof.blockNumber.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant="outline" className={`text-xs ${
+                        isHealthy ? 'text-emerald-600 border-emerald-300' : 'text-yellow-600 border-yellow-300'
+                      }`}>
+                        {ratioPct}
+                      </Badge>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {proof.timestamp > 0
+                          ? formatDistanceToNow(new Date(proof.timestamp * 1000), { addSuffix: true })
+                          : `VR ${proof.votingRound.toLocaleString()}`
+                        }
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-6 text-center text-muted-foreground">
+              <Info className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No on-chain proof history found</p>
+              <p className="text-xs mt-1">Proofs will appear when attestations are published on Coston2</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

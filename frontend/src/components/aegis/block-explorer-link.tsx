@@ -24,6 +24,15 @@ export function BlockExplorerLink({
   className = '',
   truncate = true,
 }: BlockExplorerLinkProps) {
+  // Don't render a link if value is empty or invalid
+  if (!value || value.length < 10) {
+    return (
+      <span className={`text-muted-foreground font-mono text-xs ${className}`}>
+        {label || 'N/A'}
+      </span>
+    );
+  }
+
   const explorerUrl = FLARE_CONFIG.coston2.blockExplorer;
   const url = `${explorerUrl}/${type}/${value}`;
 

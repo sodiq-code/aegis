@@ -227,53 +227,25 @@ export async function GET() {
           attestor: currentAttestor,
           isValid: currentIsValid,
           blockNumber: currentBlock,
-          transactionHash: '0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481',
+          transactionHash: '', // No tx hash available from contract state alone
         });
       }
     }
 
-    // If no on-chain proofs found, add known M3 checkpoint data
-    if (proofs.length === 0) {
+    // If no on-chain proofs found, provide current contract state as fallback
+    if (proofs.length === 0 && currentMerkleRoot && currentMerkleRoot !== '0x' + '0'.repeat(64)) {
       proofs.push({
-        merkleRoot: '0x93041e047f6688a8bf87014abc061c9650a11659e2efb1f0cedc2ce75dc9c173',
-        surplusBps: 4000,
-        totalFxrpCollateral: 1400000,
-        totalLiabilities: 1000000,
+        merkleRoot: currentMerkleRoot,
+        surplusBps: currentSurplusBps || 4000,
+        totalFxrpCollateral: currentTotalCollateral || 1400000,
+        totalLiabilities: currentTotalLiabilities || 1000000,
         collateralRatio: onChainRatio || 14000,
-        timestamp: Math.floor(Date.now() / 1000) - 120,
+        timestamp: currentTimestamp || Math.floor(Date.now() / 1000) - 120,
         votingRound: currentVotingRound || 0,
-        attestor: '0xcb08be1cc86d3f94c54c64682372e32f669134bc',
-        isValid: true,
-        blockNumber: 33565198,
-        transactionHash: '0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481',
-      });
-
-      proofs.push({
-        merkleRoot: '0x4fc7c8d5a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e',
-        surplusBps: 5000,
-        totalFxrpCollateral: 1500000,
-        totalLiabilities: 1000000,
-        collateralRatio: 15000,
-        timestamp: Math.floor(Date.now() / 1000) - 3600,
-        votingRound: Math.max(0, (currentVotingRound || 0) - 3),
-        attestor: '0xcb08be1cc86d3f94c54c64682372e32f669134bc',
-        isValid: false,
-        blockNumber: 33564557,
-        transactionHash: '0x4fc7c8d5a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0',
-      });
-
-      proofs.push({
-        merkleRoot: '0xa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2',
-        surplusBps: 6000,
-        totalFxrpCollateral: 1600000,
-        totalLiabilities: 1000000,
-        collateralRatio: 16000,
-        timestamp: Math.floor(Date.now() / 1000) - 10800,
-        votingRound: Math.max(0, (currentVotingRound || 0) - 10),
-        attestor: '0xcb08be1cc86d3f94c54c64682372e32f669134bc',
-        isValid: false,
-        blockNumber: 33560000,
-        transactionHash: '0xa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4',
+        attestor: currentAttestor || '0xe37ee912289b047a7c5e9dc8c15ab23e21b8b0c4',
+        isValid: currentIsValid,
+        blockNumber: currentBlock,
+        transactionHash: '', // Real hash not available without event logs
       });
     }
 

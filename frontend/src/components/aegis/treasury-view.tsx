@@ -16,11 +16,11 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
-import { useVaultState, useRiskScore } from '@/hooks/use-aegis-data';
+import { useVaultState, useRiskScore, useVaultEvents } from '@/hooks/use-aegis-data';
 import {
   Landmark, AlertTriangle, CheckCircle2, RefreshCw, Shield,
   Activity, Clock, ExternalLink, ShieldAlert, ShieldCheck,
-  Wallet, FileCheck, Zap, CircleDollarSign
+  Wallet, FileCheck, Zap, CircleDollarSign, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
@@ -28,6 +28,7 @@ import { formatDistanceToNow } from 'date-fns';
 export function TreasuryView() {
   const { data: vaultState, loading, error, lastFetched, refetch } = useVaultState();
   const { score: riskScore, loading: riskLoading } = useRiskScore();
+  const { events: vaultEvents, loading: eventsLoading } = useVaultEvents();
 
   const vault = vaultState?.vault;
   const isConnected = vaultState?.connected ?? false;
@@ -315,69 +316,72 @@ export function TreasuryView() {
             <CardDescription>Latest vault operations (on-chain)</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-0">
-              {[
-                {
-                  action: 'Solvency Proof Published',
-                  time: '2 min ago',
-                  status: 'success',
-                  detail: 'Root: 0x93041e04...',
-                  icon: FileCheck,
-                  txHash: '0xfb4eeb96d5a1c3c4b2a8f1e7d3c5b6a9',
-                },
-                {
-                  action: 'Risk Assessment',
-                  time: '5 min ago',
-                  status: 'success',
-                  detail: `Score: ${riskScore?.toFixed(2) ?? '7.52'}, Action: Hold`,
-                  icon: Zap,
-                  txHash: null,
-                },
-                {
-                  action: 'FDC Attestation (XRPL)',
-                  time: '8 min ago',
-                  status: 'success',
-                  detail: 'Payment verified',
-                  icon: ShieldCheck,
-                  txHash: '0x4fc7c8d5a2b1e3f4c5d6a7b8e9f0a1b2',
-                },
-                {
-                  action: 'FXRP Deposit',
-                  time: '15 min ago',
-                  status: 'success',
-                  detail: '500 FXRP from 0xe37E...',
-                  icon: Wallet,
-                  txHash: '0xa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',
-                },
-                {
-                  action: 'FXRP Deposit',
-                  time: '16 min ago',
-                  status: 'success',
-                  detail: '200 FXRP from 0x1234...',
-                  icon: CircleDollarSign,
-                  txHash: '0xd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9',
-                },
-              ].map((item, i) => {
-                const Icon = item.icon;
-                return (
-                  <div key={i} className="flex items-center justify-between py-2.5 border-b last:border-0 hover:bg-muted/30 -mx-2 px-2 rounded transition-colors">
-                    <div className="flex items-center gap-3">
-                      <Icon className="h-4 w-4 text-emerald-500" />
-                      <div>
-                        <p className="text-sm font-medium">{item.action}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.detail}
-                          {item.txHash && (
-                            <> &middot; <BlockExplorerLink type="tx" value={item.txHash} /></>
-                          )}
-                        </p>
-                      </div>
+            {eventsLoading && vaultEvents.length === 0 ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center gap-3 py-2">
+                    <Skeleton className="h-4 w-4 rounded-full" />
+                    <div className="space-y-1 flex-1">
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="h-3 w-48" />
                     </div>
-                    <span className="text-xs text-muted-foreground">{item.time}</span>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            ) : vaultEvents.length > 0 ? (
+              <div className="space-y-0">
+                {vaultEvents.slice(0, 10).map((event, i) => {
+                  // Map event type to icon
+                  const eventIconMap: Record<string, typeof FileCheck> = {
+                    'FXRP Deposit': Wallet,
+                    'Solvency Proof Published': FileCheck,
+                    'Position Revalued': Zap,
+                    'FDC Attestation (XRPL)': ShieldCheck,
+                    'Risk Assessment': Zap,
+                    'Emergency Mode Entered': ShieldAlert,
+                    'Safe State Entered': ShieldCheck,
+                    'Vault Event': Activity,
+                    'Solvency Event': FileCheck,
+                  };
+                  const EventIcon = eventIconMap[event.type] || Activity;
+                  // Build detail line from event.details
+                  const detailParts: string[] = [];
+                  if (event.details.amount) detailParts.push(event.details.amount);
+                  if (event.details.depositor) detailParts.push(`from ${event.details.depositor}`);
+                  if (event.details.merkleRoot) detailParts.push(`Root: ${event.details.merkleRoot}`);
+                  if (event.details.valuation) detailParts.push(event.details.valuation);
+                  if (event.details.positionId) detailParts.push(`Pos #${event.details.positionId}`);
+                  const detailLine = detailParts.length > 0 ? detailParts.join(' · ') : '';
+
+                  return (
+                    <div key={i} className="flex items-center justify-between py-2.5 border-b last:border-0 hover:bg-muted/30 -mx-2 px-2 rounded transition-colors">
+                      <div className="flex items-center gap-3">
+                        <EventIcon className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium">{event.type}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {detailLine}
+                            {detailLine && event.transactionHash && ' · '}
+                            {event.transactionHash && (
+                              <BlockExplorerLink type="tx" value={event.transactionHash} />
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                        Blk {event.blockNumber.toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-muted-foreground">
+                <Info className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No recent on-chain events found</p>
+                <p className="text-xs mt-1">Events will appear when vault actions occur on Coston2</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
