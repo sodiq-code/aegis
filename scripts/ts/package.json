@@ -1,0 +1,14 @@
+{
+  "name": "aegis-publish-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "publish-solvency": "bun run publish-solvency.ts",
+    "verify-proof": "bun run verify-proof.ts",
+    "read-state": "bun run read-state.ts"
+  },
+  "dependencies": {
+    "ethers": "^6.17.0"
+  }
+}

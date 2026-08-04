@@ -355,17 +355,22 @@ export function useProofVerification() {
   const [verificationResult, setVerificationResult] = useState<ProofVerificationResult | null>(null);
   const { toast } = useToast();
 
-  const verifyProof = useCallback(async (merkleRoot: string) => {
+  const verifyProof = useCallback(async (merkleRootOrLeaf: string, proof?: string[]) => {
     setVerifying(true);
     setVerifyError(null);
     setVerified(false);
     setVerificationResult(null);
     try {
       // Call the REAL /api/verify-proof endpoint
+      // Mode 1: if proof is provided, do real Merkle verification via verifySolvency(proof, leaf)
+      // Mode 2: if only merkleRoot is provided, do status check against current on-chain proof
+      const payload = proof && proof.length > 0
+        ? { leaf: merkleRootOrLeaf, proof }
+        : { merkleRoot: merkleRootOrLeaf };
       const response = await fetch('/api/verify-proof', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ merkleRoot }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -384,14 +389,20 @@ export function useProofVerification() {
         setVerified(true);
         toast({
           title: 'Proof Verified',
-          description: 'The solvency proof is cryptographically valid on Coston2',
+          description: proof
+            ? 'Leaf is cryptographically included in the on-chain Merkle root'
+            : 'The solvency proof is cryptographically valid on Coston2',
         });
       } else {
         // Proof was checked but did not verify — this is NOT an error
-        setVerifyError('Proof did not verify on-chain. The Merkle root does not match the current on-chain proof.');
+        setVerifyError(proof
+          ? 'Leaf NOT in current Merkle root. The position is not included in the published proof.'
+          : 'Proof did not verify on-chain. The Merkle root does not match the current on-chain proof.');
         toast({
           title: 'Proof Not Verified',
-          description: 'The provided Merkle root does not match the current on-chain solvency proof.',
+          description: proof
+            ? 'The provided leaf is not in the current on-chain Merkle root'
+            : 'The provided Merkle root does not match the current on-chain solvency proof.',
           variant: 'destructive',
         });
       }

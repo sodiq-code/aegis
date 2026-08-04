@@ -17,6 +17,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
 import { useSolvencyData, useProofVerification, useSolvencyProofs } from '@/hooks/use-aegis-data';
 import { AEGIS_CONTRACTS } from '@/lib/flare-config';
@@ -34,6 +36,8 @@ export function AuditView() {
   const { proofs, loading: proofsLoading, refetch: refetchProofs } = useSolvencyProofs();
   const [showProofData, setShowProofData] = useState(false);
   const [attestationLoading, setAttestationLoading] = useState(false);
+  const [leafInput, setLeafInput] = useState('');
+  const [proofInput, setProofInput] = useState('');
 
   const statusConfig = {
     HEALTHY: { color: 'emerald', icon: ShieldCheck, label: 'Healthy' },
@@ -57,6 +61,23 @@ export function AuditView() {
   const handleVerify = async () => {
     resetVerification();
     await verifyProof(solvencyData?.proofData || '0x0');
+  };
+
+  const handleVerifyLeaf = async () => {
+    resetVerification();
+    let proof: string[] = [];
+    try {
+      proof = JSON.parse(proofInput);
+      if (!Array.isArray(proof)) throw new Error('proof must be a JSON array');
+    } catch (e) {
+      // If not JSON, try comma-separated
+      try {
+        proof = proofInput.split(',').map(s => s.trim()).filter(s => s.startsWith('0x'));
+      } catch {
+        proof = [];
+      }
+    }
+    await verifyProof(leafInput, proof);
   };
 
   return (
@@ -268,6 +289,46 @@ export function AuditView() {
                   )}
                   {verifying ? 'Verifying on Coston2...' : 'Verify Proof On-Chain'}
                 </Button>
+
+                {/* Position Inclusion Verification (real Merkle proof) */}
+                <div className="p-3 rounded-lg border border-muted bg-muted/30 space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Fingerprint className="h-3 w-3" />
+                    Position Inclusion Verification
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Verify a specific position leaf is included in the on-chain Merkle root.
+                    Calls <code className="font-mono text-[10px]">SolvencyRoot.verifySolvency(proof, leaf)</code>.
+                  </p>
+                  <div className="space-y-1.5">
+                    <Input
+                      placeholder="leaf (0x... bytes32)"
+                      value={leafInput}
+                      onChange={(e) => setLeafInput(e.target.value)}
+                      className="font-mono text-[11px] h-8"
+                    />
+                    <Textarea
+                      placeholder={'proof (JSON array of bytes32)\ne.g. ["0x...", "0x..."]'}
+                      value={proofInput}
+                      onChange={(e) => setProofInput(e.target.value)}
+                      className="font-mono text-[11px] min-h-[60px] text-xs"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleVerifyLeaf}
+                    disabled={verifying || !leafInput || !proofInput}
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                  >
+                    {verifying ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Fingerprint className="h-3 w-3" />
+                    )}
+                    Verify Position Leaf
+                  </Button>
+                </div>
 
                 {verified && (
                   <motion.div
