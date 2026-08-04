@@ -136,6 +136,8 @@ export function useSolvencyData() {
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 30000); // Poll every 30s
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   const requestAttestation = useCallback(async (merkleRoot: string) => {
@@ -444,7 +446,7 @@ interface SolvencyProof {
   transactionHash: string;
 }
 
-export function useSolvencyProofs() {
+export function useSolvencyProofs(pollInterval = 60000) {
   const [proofs, setProofs] = useState<SolvencyProof[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -470,7 +472,9 @@ export function useSolvencyProofs() {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    const interval = setInterval(fetchData, pollInterval);
+    return () => clearInterval(interval);
+  }, [fetchData, pollInterval]);
 
   return { proofs, loading, error, lastFetched, refetch: fetchData };
 }

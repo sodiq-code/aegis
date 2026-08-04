@@ -353,6 +353,10 @@ export function TreasuryView() {
                   if (event.details.positionId) detailParts.push(`Pos #${event.details.positionId}`);
                   const detailLine = detailParts.length > 0 ? detailParts.join(' · ') : '';
 
+                  const timeAgo = event.timestamp && event.timestamp > 0
+                    ? formatDistanceToNow(new Date(event.timestamp * 1000), { addSuffix: true })
+                    : null;
+
                   return (
                     <div key={i} className="flex items-center justify-between py-2.5 border-b last:border-0 hover:bg-muted/30 -mx-2 px-2 rounded transition-colors">
                       <div className="flex items-center gap-3">
@@ -368,9 +372,16 @@ export function TreasuryView() {
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                        Blk {event.blockNumber.toLocaleString()}
-                      </span>
+                      <div className="text-right ml-2">
+                        <BlockExplorerLink
+                          type="block"
+                          value={event.blockNumber.toString()}
+                          label={`Blk ${event.blockNumber.toLocaleString()}`}
+                        />
+                        {timeAgo && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo}</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

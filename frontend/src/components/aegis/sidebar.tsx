@@ -2,20 +2,23 @@
  * Aegis Dashboard Sidebar
  * 
  * Navigation between Treasury, Policy, and Audit views.
- * Production polish: role gating, tooltips, keyboard navigation, accessibility.
+ * Production polish: role gating, tooltips, keyboard navigation, accessibility,
+ * on-chain links.
  */
 
 'use client';
 
 import { useWalletStore } from '@/lib/wallet-auth';
 import { cn } from '@/lib/utils';
-import { Landmark, Shield, FileCheck, Activity } from 'lucide-react';
+import { FLARE_CONFIG, AEGIS_CONTRACTS } from '@/lib/flare-config';
+import { Landmark, Shield, FileCheck, Activity, ExternalLink, Link2 } from 'lucide-react';
 import {
   Tooltip as UiTooltip,
   TooltipContent as UiTooltipContent,
   TooltipProvider as UiTooltipProvider,
   TooltipTrigger as UiTooltipTrigger,
 } from '@/components/ui/tooltip';
+import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
 
 export type AegisView = 'treasury' | 'policy' | 'audit';
 
@@ -110,10 +113,30 @@ export function AegisSidebar({ activeView, onViewChange }: SidebarProps) {
             })}
           </div>
         </UiTooltipProvider>
+
+        {/* On-Chain Contracts */}
+        <div className="mt-6 pt-4 border-t">
+          <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+            <Link2 className="h-3 w-3" />
+            On-Chain Contracts
+          </p>
+          <div className="space-y-1.5">
+            {[
+              { name: 'VaultCore', address: AEGIS_CONTRACTS.VaultCore },
+              { name: 'SolvencyRoot', address: AEGIS_CONTRACTS.SolvencyRoot },
+              { name: 'PolicyRegistry', address: AEGIS_CONTRACTS.PolicyRegistry },
+            ].map(({ name, address }) => (
+              <div key={name} className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">{name}</span>
+                <BlockExplorerLink type="address" value={address} truncate={true} />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Connection Status */}
-      <div className="p-3 border-t">
+      <div className="p-3 border-t space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Activity className={cn('h-3 w-3', isConnected ? 'text-emerald-500' : 'text-red-500')} />
           <span>{isConnected ? 'Connected to Flare' : 'Not connected'}</span>
@@ -121,6 +144,15 @@ export function AegisSidebar({ activeView, onViewChange }: SidebarProps) {
             <span className="ml-auto text-emerald-500">&bull;</span>
           )}
         </div>
+        <a
+          href={FLARE_CONFIG.coston2.blockExplorer}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors"
+        >
+          <ExternalLink className="h-3 w-3" />
+          Coston2 Block Explorer
+        </a>
       </div>
     </aside>
   );

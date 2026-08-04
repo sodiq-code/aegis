@@ -90,11 +90,18 @@ export default function AegisDashboard() {
 
       {/* Footer */}
       <footer className="border-t py-3 px-4 text-center text-xs text-muted-foreground">
-        <span className="flex items-center justify-center gap-2">
+        <span className="flex items-center justify-center gap-2 flex-wrap">
           <Shield className="h-3 w-3 text-emerald-600" />
           Aegis — Institutional Treasury Layer on Flare
           <span className="text-border">|</span>
-          Coston2 Testnet
+          <a
+            href="https://coston2-explorer.flare.network/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground transition-colors inline-flex items-center gap-0.5"
+          >
+            Coston2 Explorer <ArrowRight className="h-3 w-3" />
+          </a>
           <span className="text-border">|</span>
           <a
             href="https://dev.flare.network/"
@@ -102,7 +109,16 @@ export default function AegisDashboard() {
             rel="noopener noreferrer"
             className="underline hover:text-foreground transition-colors inline-flex items-center gap-0.5"
           >
-            Flare Developer Hub <ArrowRight className="h-3 w-3" />
+            Flare Dev Hub <ArrowRight className="h-3 w-3" />
+          </a>
+          <span className="text-border">|</span>
+          <a
+            href="https://dev.flare.network/fassets/developer-guides/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground transition-colors inline-flex items-center gap-0.5"
+          >
+            FAssets Guide <ArrowRight className="h-3 w-3" />
           </a>
         </span>
       </footer>

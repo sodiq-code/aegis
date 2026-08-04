@@ -28,18 +28,31 @@ async function rpcCall(method: string, params: unknown[] = []): Promise<unknown>
   return data.result;
 }
 
-// Event topic0 signatures (keccak256)
+// Event topic0 signatures (keccak256 of event signatures)
+// These are verified against real on-chain events on Coston2
 const EVENT_TOPICS = {
+  // SolvencyProofPublished(bytes32 indexed merkleRoot, uint256 surplusBps, uint256 totalFxrpCollateral, uint256 collateralRatio, uint256 votingRound, address indexed attestor)
+  // Verified on-chain at block 33,565,198 on Coston2
+  SolvencyProofPublished: '0x6cd2dab55978f0a59cda7b61611abc0e4edf4c44d09e857d7d33de669273be60',
+  // SolvencyProofVerified(bytes32 indexed merkleRoot, bool isValid, uint256 collateralRatio)
+  SolvencyProofVerified: '0xc6df40680784542e8461993c1e6c5c4dca0ae5ac8e37352c6cf679a2df15ffcf',
+  // DepositMade(uint256 indexed positionId, address indexed depositor, uint256 amount, uint256 policyId)
   DepositMade: '0xf7748ed362ae6427631c778e495f7eb63b00c0794b6066744a0cba2c59135a65',
+  // PositionRevalued(uint256 indexed positionId, uint256 newValuation, uint256 timestamp)
   PositionRevalued: '0x4cdb25a2be20563cd5111483810c6262c3f2a2dd2a1c2f60aa33404f089770c5',
+  // WithdrawalCompleted(uint256 indexed positionId, address indexed depositor, uint256 amount)
   WithdrawalCompleted: '0xcd7211ce885c480c8874fe7e69383ad2d60ec453bdb417e7f45222bf44e47266',
+  // EmergencyModeEntered(address indexed triggeredBy)
   EmergencyModeEntered: '0x61f653d17bce5d89badcfaa56cc5044c08efe1a77a1cc5d8020588602f2da28b',
+  // SafeStateEntered(address indexed triggeredBy)
   SafeStateEntered: '0xe52c6a6ea80a6cb927747fafc3fd0bd9578b70c42f4de60c99fe6fe40c8c4f7c',
-  SolvencyProofPublished: '0x9de03ef2e119ae6f90b8e64bcdc437fd3a01791c7715866a5082b01f90a50bce',
 } as const;
 
 // Known activity block from M3 checkpoint (Task 18)
 const KNOWN_ACTIVITY_BLOCK = 33565198;
+
+// Known transaction hash at M3 checkpoint (verified on-chain)
+const KNOWN_M3_TX_HASH = '0xfb4eeb96febf3929b6f1f55d394476a60815754d9ea84219edf27f1cb3bf4481';
 
 interface VaultEvent {
   type: string;
@@ -102,6 +115,19 @@ function decodeUint256(data: string, offset: number): bigint {
   return BigInt('0x' + data.slice(start, start + 64));
 }
 
+/**
+ * Get block timestamp for a given block number
+ */
+async function getBlockTimestamp(blockNumber: number): Promise<number> {
+  try {
+    const block = await rpcCall('eth_getBlockByNumber', [`0x${blockNumber.toString(16)}`, false]) as Record<string, string>;
+    if (block && block.timestamp) {
+      return parseInt(block.timestamp, 16);
+    }
+  } catch {}
+  return 0;
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -111,20 +137,6 @@ export async function GET(request: Request) {
     const currentBlockHex = await rpcCall('eth_blockNumber') as string;
     const currentBlock = parseInt(currentBlockHex as string, 16);
     
-    let fromBlock: number;
-    let toBlock: number;
-    
-    if (rangeParam === 'all') {
-      // Scan known activity area + recent blocks
-      fromBlock = KNOWN_ACTIVITY_BLOCK - 30;
-      toBlock = KNOWN_ACTIVITY_BLOCK + 60;
-    } else {
-      // Recent: scan last ~60 blocks only (fast)
-      fromBlock = currentBlock - 60;
-      toBlock = currentBlock;
-    }
-    
-    // For 'all', also scan recent blocks
     if (rangeParam === 'all') {
       const events: VaultEvent[] = [];
       
@@ -146,17 +158,23 @@ export async function GET(request: Request) {
       events.sort((a, b) => b.blockNumber - a.blockNumber);
       
       return NextResponse.json({
-        events: events.slice(0, 50), // Limit to 50 most recent events
-        scannedRange: { from: fromBlock, to: toBlock, currentBlock },
+        events: events.slice(0, 50),
+        scannedRange: { 
+          from: KNOWN_ACTIVITY_BLOCK - 30, 
+          to: Math.max(currentBlock, KNOWN_ACTIVITY_BLOCK + 30), 
+          currentBlock 
+        },
       });
     }
     
-    const events = await scanBlockRange(fromBlock, toBlock);
+    // Recent: scan last ~60 blocks only (fast)
+    const fromBlock = currentBlock - 60;
+    const events = await scanBlockRange(fromBlock, currentBlock);
     events.sort((a, b) => b.blockNumber - a.blockNumber);
     
     return NextResponse.json({
       events: events.slice(0, 50),
-      scannedRange: { from: fromBlock, to: toBlock, currentBlock },
+      scannedRange: { from: fromBlock, to: currentBlock, currentBlock },
     });
   } catch (error) {
     return NextResponse.json(
@@ -174,6 +192,59 @@ async function scanBlockRange(fromBlock: number, toBlock: number): Promise<Vault
   const vaultCore = AEGIS_CONTRACTS.VaultCore;
   const solvencyRoot = AEGIS_CONTRACTS.SolvencyRoot;
   
+  // Fetch SolvencyProofPublished events from SolvencyRoot (primary event)
+  const solvencyLogs = await fetchLogsInChunks(solvencyRoot, fromBlock, toBlock, EVENT_TOPICS.SolvencyProofPublished);
+  for (const log of solvencyLogs) {
+    const merkleRoot = log.topics[1] || '0x0';
+    const attestor = log.topics[2] ? decodeAddress(log.topics[2]) : '0x0';
+    const surplusBps = decodeUint256(log.data, 0);
+    const totalFxrpCollateral = decodeUint256(log.data, 1);
+    const collateralRatio = decodeUint256(log.data, 2);
+    const votingRound = decodeUint256(log.data, 3);
+    
+    const blockNum = parseInt(log.blockNumber, 16);
+    const timestamp = await getBlockTimestamp(blockNum);
+    
+    events.push({
+      type: 'Solvency Proof Published',
+      blockNumber: blockNum,
+      transactionHash: log.transactionHash,
+      contract: 'SolvencyRoot',
+      timestamp,
+      details: {
+        merkleRoot: `${merkleRoot.slice(0, 10)}...${merkleRoot.slice(-4)}`,
+        attestor: `${attestor.slice(0, 8)}...${attestor.slice(-4)}`,
+        collateralRatio: `${(Number(collateralRatio) / 100).toFixed(0)}%`,
+        surplusBps: Number(surplusBps).toString(),
+        votingRound: Number(votingRound).toString(),
+      },
+    });
+  }
+
+  // Fetch SolvencyProofVerified events
+  const verifiedLogs = await fetchLogsInChunks(solvencyRoot, fromBlock, toBlock, EVENT_TOPICS.SolvencyProofVerified);
+  for (const log of verifiedLogs) {
+    const merkleRoot = log.topics[1] || '0x0';
+    const isValid = decodeUint256(log.data, 0);
+    const collateralRatio = decodeUint256(log.data, 1);
+    
+    const blockNum = parseInt(log.blockNumber, 16);
+    const timestamp = await getBlockTimestamp(blockNum);
+    
+    events.push({
+      type: 'Solvency Proof Verified',
+      blockNumber: blockNum,
+      transactionHash: log.transactionHash,
+      contract: 'SolvencyRoot',
+      timestamp,
+      details: {
+        merkleRoot: `${merkleRoot.slice(0, 10)}...${merkleRoot.slice(-4)}`,
+        isValid: Number(isValid) === 1 ? 'true' : 'false',
+        collateralRatio: `${(Number(collateralRatio) / 100).toFixed(0)}%`,
+      },
+    });
+  }
+  
   // Fetch DepositMade events from VaultCore
   const depositLogs = await fetchLogsInChunks(vaultCore, fromBlock, toBlock, EVENT_TOPICS.DepositMade);
   for (const log of depositLogs) {
@@ -182,14 +253,19 @@ async function scanBlockRange(fromBlock: number, toBlock: number): Promise<Vault
     const amount = decodeUint256(log.data, 0);
     const policyId = decodeUint256(log.data, 1);
     
+    const blockNum = parseInt(log.blockNumber, 16);
+    const timestamp = await getBlockTimestamp(blockNum);
+    
     events.push({
       type: 'FXRP Deposit',
-      blockNumber: parseInt(log.blockNumber, 16),
+      blockNumber: blockNum,
       transactionHash: log.transactionHash,
       contract: 'VaultCore',
+      timestamp,
       details: {
         positionId: positionId.toString(),
         depositor: `${depositor.slice(0, 8)}...${depositor.slice(-4)}`,
+        depositorFull: depositor,
         amount: (Number(amount) / 1e6).toFixed(2) + ' FXRP',
         policyId: policyId.toString(),
       },
@@ -201,33 +277,17 @@ async function scanBlockRange(fromBlock: number, toBlock: number): Promise<Vault
   for (const log of revalueLogs) {
     const positionId = log.topics[1] ? parseInt(log.topics[1], 16) : 0;
     const newValuation = decodeUint256(log.data, 0);
-    const timestamp = decodeUint256(log.data, 1);
+    const timestampVal = decodeUint256(log.data, 1);
     
     events.push({
       type: 'Position Revalued',
       blockNumber: parseInt(log.blockNumber, 16),
       transactionHash: log.transactionHash,
       contract: 'VaultCore',
-      timestamp: Number(timestamp),
+      timestamp: Number(timestampVal),
       details: {
         positionId: positionId.toString(),
         valuation: (Number(newValuation) / 1e6).toFixed(2) + ' USD',
-      },
-    });
-  }
-  
-  // Fetch SolvencyProofPublished events from SolvencyRoot
-  const solvencyLogs = await fetchLogsInChunks(solvencyRoot, fromBlock, toBlock, EVENT_TOPICS.SolvencyProofPublished);
-  for (const log of solvencyLogs) {
-    const merkleRoot = log.topics[1] || '0x0';
-    
-    events.push({
-      type: 'Solvency Proof Published',
-      blockNumber: parseInt(log.blockNumber, 16),
-      transactionHash: log.transactionHash,
-      contract: 'SolvencyRoot',
-      details: {
-        merkleRoot: `${merkleRoot.slice(0, 10)}...${merkleRoot.slice(-4)}`,
       },
     });
   }
@@ -264,18 +324,20 @@ async function scanBlockRange(fromBlock: number, toBlock: number): Promise<Vault
     });
   }
   
-  // Also scan all events (without topic filter) from known activity area to catch custom events
+  // Also scan all events (without topic filter) to catch any uncategorized events
   const allVaultLogs = await fetchLogsInChunks(vaultCore, fromBlock, toBlock);
   for (const log of allVaultLogs) {
     const topic0 = log.topics[0] || '';
-    // Check if this event is already captured
     const isKnown = Object.values(EVENT_TOPICS).some(t => t === topic0);
     if (!isKnown) {
+      const blockNum = parseInt(log.blockNumber, 16);
+      const timestamp = await getBlockTimestamp(blockNum);
       events.push({
         type: 'Vault Event',
-        blockNumber: parseInt(log.blockNumber, 16),
+        blockNumber: blockNum,
         transactionHash: log.transactionHash,
         contract: 'VaultCore',
+        timestamp,
         details: {
           topic0: `${topic0.slice(0, 10)}...`,
         },
@@ -288,11 +350,14 @@ async function scanBlockRange(fromBlock: number, toBlock: number): Promise<Vault
     const topic0 = log.topics[0] || '';
     const isKnown = Object.values(EVENT_TOPICS).some(t => t === topic0);
     if (!isKnown) {
+      const blockNum = parseInt(log.blockNumber, 16);
+      const timestamp = await getBlockTimestamp(blockNum);
       events.push({
         type: 'Solvency Event',
-        blockNumber: parseInt(log.blockNumber, 16),
+        blockNumber: blockNum,
         transactionHash: log.transactionHash,
         contract: 'SolvencyRoot',
+        timestamp,
         details: {
           topic0: `${topic0.slice(0, 10)}...`,
           data: log.data ? `${log.data.slice(0, 10)}...` : '',

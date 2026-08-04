@@ -23,14 +23,14 @@ import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import {
   FileCheck, CheckCircle2, AlertTriangle, Shield, Eye, EyeOff,
   RefreshCw, Search, Clock, ShieldCheck, Loader2, Info,
-  Fingerprint, FileLock2, ScanSearch
+  Fingerprint, FileLock2, ScanSearch, ExternalLink, Link2
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export function AuditView() {
   const { data: solvencyData, loading, error, lastFetched, refetch, requestAttestation } = useSolvencyData();
   const { verifying, verified, verifyError, verifyProof, resetVerification } = useProofVerification();
-  const { proofs, loading: proofsLoading } = useSolvencyProofs();
+  const { proofs, loading: proofsLoading, refetch: refetchProofs } = useSolvencyProofs();
   const [showProofData, setShowProofData] = useState(false);
   const [attestationLoading, setAttestationLoading] = useState(false);
 
@@ -42,7 +42,7 @@ export function AuditView() {
   } as const;
 
   const currentStatus = solvencyData?.status ?? 'INSOLVENT';
-  const statusInfo = statusConfig[currentStatus];
+  const statusInfo = statusConfig[currentStatus as keyof typeof statusConfig] ?? statusConfig.INSOLVENT;
 
   const handleRequestAttestation = async () => {
     setAttestationLoading(true);
@@ -317,8 +317,21 @@ export function AuditView() {
       {/* Proof History */}
       <Card className="transition-shadow hover:shadow-md">
         <CardHeader>
-          <CardTitle className="text-base">Proof History</CardTitle>
-          <CardDescription>Recent solvency attestation publications</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Proof History</CardTitle>
+              <CardDescription>Recent solvency attestation publications</CardDescription>
+            </div>
+            <Button
+              onClick={refetchProofs}
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              disabled={proofsLoading}
+            >
+              <RefreshCw className={`h-3 w-3 ${proofsLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {proofsLoading && proofs.length === 0 ? (
@@ -341,15 +354,55 @@ export function AuditView() {
                   ? `${(proof.collateralRatio / 100).toFixed(0)}%`
                   : `${proof.collateralRatio}%`;
                 const isHealthy = proof.collateralRatio >= 15000;
+                const timeAgo = proof.timestamp > 0
+                  ? formatDistanceToNow(new Date(proof.timestamp * 1000), { addSuffix: true })
+                  : proof.votingRound > 0
+                    ? `VR ${proof.votingRound.toLocaleString()}`
+                    : null;
+                const hasTxHash = proof.transactionHash && proof.transactionHash.length > 10;
+
                 return (
                   <div key={i} className="flex items-center justify-between py-2.5 border-b last:border-0 hover:bg-muted/30 -mx-2 px-2 rounded transition-colors">
                     <div className="flex items-center gap-3">
                       <FileCheck className={`h-4 w-4 shrink-0 ${isHealthy ? 'text-emerald-500' : 'text-yellow-500'}`} />
                       <div>
                         <p className="text-sm font-medium">Proof published</p>
-                        <p className="text-xs text-muted-foreground">
-                          TX: <BlockExplorerLink type="tx" value={proof.transactionHash} /> &middot; Block: {proof.blockNumber.toLocaleString()}
-                        </p>
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          {hasTxHash ? (
+                            <p className="flex items-center gap-1 flex-wrap">
+                              <span>TX:</span>
+                              <BlockExplorerLink type="tx" value={proof.transactionHash} />
+                              <span className="mx-0.5">·</span>
+                              <span>Block:</span>
+                              <BlockExplorerLink
+                                type="block"
+                                value={proof.blockNumber.toString()}
+                                label={proof.blockNumber.toLocaleString()}
+                              />
+                            </p>
+                          ) : (
+                            <p className="flex items-center gap-1">
+                              <span>Block:</span>
+                              <BlockExplorerLink
+                                type="block"
+                                value={proof.blockNumber.toString()}
+                                label={proof.blockNumber.toLocaleString()}
+                              />
+                            </p>
+                          )}
+                          {proof.merkleRoot && proof.merkleRoot.length > 10 && (
+                            <p className="flex items-center gap-1">
+                              <span>Root:</span>
+                              <code className="font-mono text-[10px]">{proof.merkleRoot.slice(0, 10)}...{proof.merkleRoot.slice(-4)}</code>
+                            </p>
+                          )}
+                          {proof.attestor && proof.attestor.length > 10 && (
+                            <p className="flex items-center gap-1">
+                              <span>Attestor:</span>
+                              <BlockExplorerLink type="address" value={proof.attestor} />
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -358,12 +411,19 @@ export function AuditView() {
                       }`}>
                         {ratioPct}
                       </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {proof.timestamp > 0
-                          ? formatDistanceToNow(new Date(proof.timestamp * 1000), { addSuffix: true })
-                          : `VR ${proof.votingRound.toLocaleString()}`
-                        }
-                      </p>
+                      {timeAgo && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {timeAgo}
+                        </p>
+                      )}
+                      {hasTxHash && (
+                        <BlockExplorerLink
+                          type="tx"
+                          value={proof.transactionHash}
+                          label="View tx"
+                          className="mt-1 inline-flex items-center gap-0.5"
+                        />
+                      )}
                     </div>
                   </div>
                 );

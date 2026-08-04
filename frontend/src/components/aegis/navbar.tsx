@@ -2,7 +2,7 @@
  * Aegis Navigation Bar
  * 
  * Top navigation with wallet connection, role switching, and theme toggle.
- * Production polish: loading states, error display, accessibility.
+ * Production polish: loading states, error display, accessibility, network link.
  */
 
 'use client';
@@ -12,6 +12,7 @@ import { useXamanWallet } from '@/lib/wallet-auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { FLARE_CONFIG } from '@/lib/flare-config';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, Shield, ChevronDown, LogOut, User, Loader2 } from 'lucide-react';
+import { Wallet, Shield, ChevronDown, LogOut, User, Loader2, ExternalLink, Globe } from 'lucide-react';
 
 export function AegisNavbar() {
   const { status, address, balance, type, role, error, connectEvm, disconnect, switchRole } = useWalletStore();
@@ -47,9 +48,18 @@ export function AegisNavbar() {
 
         {/* Network & Role Badge */}
         <div className="hidden md:flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">
-            Coston2 Testnet
-          </Badge>
+          <a
+            href={FLARE_CONFIG.coston2.blockExplorer}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1"
+          >
+            <Badge variant="outline" className="text-xs hover:bg-muted transition-colors cursor-pointer">
+              <Globe className="h-3 w-3 mr-0.5" />
+              Coston2 Testnet
+              <ExternalLink className="h-2.5 w-2.5 ml-0.5" />
+            </Badge>
+          </a>
           <Badge variant={roleColor as 'default' | 'secondary' | 'destructive'} className="text-xs">
             {roleLabel}
           </Badge>
@@ -89,6 +99,13 @@ export function AegisNavbar() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => switchRole('admin')} className={role === 'admin' ? 'bg-accent' : ''}>
                   Admin
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => window.open(`${FLARE_CONFIG.coston2.blockExplorer}/address/${address}`, '_blank')}
+                >
+                  <ExternalLink className="mr-2 h-3 w-3" />
+                  View on Explorer
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={disconnect} className="text-red-600">
