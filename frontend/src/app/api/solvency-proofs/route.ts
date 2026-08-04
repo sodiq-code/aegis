@@ -13,11 +13,11 @@ import { NextResponse } from 'next/server';
 import { getFlareConfig, AEGIS_CONTRACTS, FLARE_SYSTEM_CONTRACTS } from '@/lib/flare-config';
 
 interface JsonRpcResponse {
-  result?: string;
+  result?: unknown;
   error?: { code: number; message: string };
 }
 
-async function rpcCall(method: string, params: unknown[] = []): Promise<string> {
+async function rpcCall(method: string, params: unknown[] = []): Promise<unknown> {
   const config = getFlareConfig();
   const response = await fetch(config.rpcUrl, {
     method: 'POST',
@@ -26,12 +26,17 @@ async function rpcCall(method: string, params: unknown[] = []): Promise<string> 
   });
   const data: JsonRpcResponse = await response.json();
   if (data.error) throw new Error(data.error.message);
-  return data.result || '0x0';
+  return data.result;
+}
+
+async function rpcCallString(method: string, params: unknown[] = []): Promise<string> {
+  const result = await rpcCall(method, params);
+  return (result as string) || '0x0';
 }
 
 async function safeEthCall(to: string, data: string): Promise<string | null> {
   try {
-    const result = await rpcCall('eth_call', [{ to, data }, 'latest']);
+    const result = await rpcCallString('eth_call', [{ to, data }, 'latest']);
     if (result && result !== '0x' && result !== '0x0' && result.length > 10) {
       return result;
     }
@@ -42,14 +47,14 @@ async function safeEthCall(to: string, data: string): Promise<string | null> {
 }
 
 async function getBlockNumber(): Promise<number> {
-  const hex = await rpcCall('eth_blockNumber');
+  const hex = await rpcCallString('eth_blockNumber');
   return parseInt(hex, 16);
 }
 
 async function getBlockTimestamp(blockNumber: number): Promise<number> {
   try {
     const block = await rpcCall('eth_getBlockByNumber', [`0x${blockNumber.toString(16)}`, false]);
-    const parsed = JSON.parse(block || '{}');
+    const parsed = block as Record<string, string> | null;
     if (parsed && parsed.timestamp) {
       return parseInt(parsed.timestamp, 16);
     }
@@ -114,8 +119,8 @@ async function getSolvencyProofLogs(fromBlock: number, toBlock: number): Promise
           topics: [SOLVENCY_PROOF_TOPIC],
         }]);
 
-        const logs = JSON.parse(result || '[]');
-        if (!Array.isArray(logs)) continue;
+        const logs = Array.isArray(result) ? result : [];
+        if (logs.length === 0) continue;
 
         for (const log of logs) {
           const topics = log.topics || [];
