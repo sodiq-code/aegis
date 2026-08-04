@@ -1,7 +1,8 @@
 /**
  * Aegis Navigation Bar
  * 
- * Top navigation with wallet connection and role switching.
+ * Top navigation with wallet connection, role switching, and theme toggle.
+ * Production polish: loading states, error display, accessibility.
  */
 
 'use client';
@@ -10,6 +11,7 @@ import { useWalletStore } from '@/lib/wallet-auth';
 import { useXamanWallet } from '@/lib/wallet-auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from '@/components/theme-toggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, Shield, ChevronDown, LogOut, User } from 'lucide-react';
+import { Wallet, Shield, ChevronDown, LogOut, User, Loader2 } from 'lucide-react';
 
 export function AegisNavbar() {
   const { status, address, balance, type, role, error, connectEvm, disconnect, switchRole } = useWalletStore();
@@ -39,7 +41,7 @@ export function AegisNavbar() {
           <Shield className="h-8 w-8 text-emerald-600" />
           <div>
             <h1 className="text-lg font-bold tracking-tight">Aegis</h1>
-            <p className="text-xs text-muted-foreground">Institutional Treasury Layer on Flare</p>
+            <p className="text-xs text-muted-foreground hidden sm:block">Institutional Treasury Layer on Flare</p>
           </div>
         </div>
 
@@ -53,12 +55,14 @@ export function AegisNavbar() {
           </Badge>
         </div>
 
-        {/* Wallet Connection */}
+        {/* Right side: Theme + Wallet */}
         <div className="flex items-center gap-2">
+          <ThemeToggle />
+
           {status === 'connected' ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2 transition-all">
                   <Wallet className="h-4 w-4" />
                   <span className="hidden sm:inline">{shortAddress}</span>
                   {balance && (
@@ -71,19 +75,19 @@ export function AegisNavbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Wallet</DropdownMenuLabel>
-                <DropdownMenuItem className="text-xs text-muted-foreground">
+                <DropdownMenuItem className="text-xs text-muted-foreground font-mono">
                   <User className="mr-2 h-3 w-3" />
                   {address}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Role</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => switchRole('depositor')}>
+                <DropdownMenuItem onClick={() => switchRole('depositor')} className={role === 'depositor' ? 'bg-accent' : ''}>
                   Depositor
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => switchRole('auditor')}>
+                <DropdownMenuItem onClick={() => switchRole('auditor')} className={role === 'auditor' ? 'bg-accent' : ''}>
                   Auditor
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => switchRole('admin')}>
+                <DropdownMenuItem onClick={() => switchRole('admin')} className={role === 'admin' ? 'bg-accent' : ''}>
                   Admin
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -99,25 +103,30 @@ export function AegisNavbar() {
                 onClick={connectEvm}
                 disabled={status === 'connecting'}
                 size="sm"
-                className="gap-2"
+                className="gap-2 transition-all"
               >
-                <Wallet className="h-4 w-4" />
+                {status === 'connecting' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Wallet className="h-4 w-4" />
+                )}
                 {status === 'connecting' ? 'Connecting...' : 'MetaMask'}
               </Button>
               <Button
                 onClick={connectXrpl}
                 variant="outline"
                 size="sm"
-                className="gap-2"
+                className="gap-2 transition-all"
               >
                 <Wallet className="h-4 w-4" />
-                Xaman (XRPL)
+                <span className="hidden sm:inline">Xaman</span>
+                <span className="sm:hidden">XRPL</span>
               </Button>
             </div>
           )}
 
           {error && (
-            <p className="text-xs text-red-500 max-w-[200px] truncate">{error}</p>
+            <p className="text-xs text-red-500 max-w-[200px] truncate" role="alert">{error}</p>
           )}
         </div>
       </div>

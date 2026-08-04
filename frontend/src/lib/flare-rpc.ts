@@ -347,7 +347,7 @@ class FlareRpcClient {
    */
   async getAllPolicies(): Promise<Array<NonNullable<Awaited<ReturnType<FlareRpcClient['getPolicy']>>>>> {
     const count = await this.getPolicyCount();
-    const policies = [];
+    const policies: Array<NonNullable<Awaited<ReturnType<FlareRpcClient['getPolicy']>>>> = [];
     for (let i = 1; i <= count; i++) {
       const policy = await this.getPolicy(i);
       if (policy) policies.push(policy);

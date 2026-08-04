@@ -1,16 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Only use standalone output for Docker/local production, not Vercel
-  ...(process.env.VERCEL ? {} : { output: "standalone" }),
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "z-cdn.chatglm.cn",
-      },
-    ],
+  output: "standalone",
+  typescript: {
+    // Build errors are checked in CI; this allows faster local iteration
+    // but we keep it false for production quality
+    ignoreBuildErrors: false,
   },
+  reactStrictMode: true,
 };
 
 export default nextConfig;

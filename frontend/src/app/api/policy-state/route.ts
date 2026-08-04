@@ -196,8 +196,8 @@ export async function GET(request: Request) {
       }
 
       // Optionally check deposit/withdrawal actions
-      let depositCheck = null;
-      let withdrawCheck = null;
+      let depositCheck: { allowed: boolean; action: number; actionName: string } | null = null;
+      let withdrawCheck: { allowed: boolean; action: number; actionName: string } | null = null;
       if (checkDeposit) {
         const amount = parseInt(checkDeposit);
         const data = SELECTORS.checkAction +
