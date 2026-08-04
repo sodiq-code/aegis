@@ -5,7 +5,6 @@
 **A verifiable, confidential, AI-managed cross-chain treasury protocol for XRP-native institutions on Flare.**
 
 [![Flare](https://img.shields.io/badge/Flare-Coston2-ff4d2e?style=flat-square&logo=flare)](https://flare.network)
-[![Hackathon](https://img.shields.io/badge/Flare%20Summer%20Signal-DoraHacks-8b5cf6?style=flat-square)](https://dorahacks.io/hackathon/flaresummersignal/detail)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
 [![Foundry Tests](https://img.shields.io/badge/Foundry-143%20passing-success?style=flat-square)](./contracts)
 [![Live Dashboard](https://img.shields.io/badge/Dashboard-Live-brightgreen?style=flat-square)](https://aegis-mantle-deploy-s-projects.vercel.app)
@@ -14,38 +13,27 @@
 
 ---
 
-> **One-sentence thesis.** Aegis gives XRP-native institutions three properties no single Flare product offers today — **confidentiality, verifiable solvency, and autonomous cross-chain risk management** — by composing all five enshrined Flare primitives (FAssets, FTSO, FDC, FCC, PMW) in a single, load-bearing stack.
+> Aegis gives XRP-native institutions three properties no single Flare product offers today — **confidentiality, verifiable solvency, and autonomous cross-chain risk management** — by composing all five enshrined Flare primitives (FAssets, FTSO, FDC, FCC, PMW) in a single, load-bearing stack.
 
 ---
 
-## Why this wins
+## Key features
 
-- **All five Flare primitives are load-bearing.** FAssets, FTSO, FDC, FCC, and PMW are each structurally required — remove any one and the product cannot exist. Aegis is the only submission that uses all five together in non-trivial ways.
-- **Built for an institutional ICP.** Targets corporate XRP treasuries and large FLR holders — a segment publicly validated by Flare's VivoPower and BitGo partnerships, with no dedicated product surface on Flare today.
+- **All five Flare primitives are load-bearing.** FAssets, FTSO, FDC, FCC, and PMW are each structurally required — remove any one and the product cannot exist. Aegis uses all five together in non-trivial ways.
+- **Built for institutional treasury management.** Targets corporate XRP treasuries and large FLR holders — a segment publicly validated by Flare's VivoPower and BitGo partnerships, with no dedicated product surface on Flare today.
 - **Verifiable-confidential pattern.** Positions are computed inside a TEE and published as a Merkle root, so an auditor can verify solvency cryptographically **without ever seeing an individual position**.
 
-### Judging criteria — how Aegis performs
-
-| Judging criterion | How Aegis performs |
-|---|---|
-| **Product usefulness** | Solves a real institutional pain point (XRP treasury management) validated by Flare's VivoPower / BitGo partnerships. |
-| **Flare integration quality** | Uses **FCC + PMW + FDC + FTSO + FAssets**, each load-bearing — the dominant judging dimension. |
-| **Technical execution** | Working FCC extension (Go/TEE), 7 deployed vault contracts, PMW-mediated cross-chain flow, on-chain AI risk model. |
-| **Evidence of new work** | All core components were newly built during the six-week programme — contracts, FCC extension, SDK, and dashboard. |
-| **Clarity & future potential** | Clear institutional revenue model (management + performance fees, SaaS tier) and a credible post-hackathon commercial path. |
-
 ---
 
-## Live proofs at a glance
+## Live resources
 
-| Proof | Link |
+| Resource | Link |
 |---|---|
 | **Live dashboard** (working app) | https://aegis-mantle-deploy-s-projects.vercel.app |
 | **GitHub repository** | https://github.com/sodiq-code/aegis |
 | **Network** | Flare **Coston2** testnet (chain ID `114`) |
 | **Coston2 block explorer** | https://coston2-explorer.flare.network |
 | **Public RPC** | `https://coston2-api.flare.network/ext/C/rpc` |
-| **Hackathon page** | https://dorahacks.io/hackathon/flaresummersignal/detail |
 | **Flare developer docs** | https://dev.flare.network |
 | **Deployed contracts** | 7 Aegis contracts live on Coston2 — see table below |
 | **Test suite** | 143 Foundry tests · 13 Go packages · TypeScript SDK + Next.js build clean |
@@ -54,7 +42,7 @@
 
 ## How Flare is used
 
-> This table is the single most powerful artifact in the repo. It directly answers the **Flare integration quality** criterion and makes the *“remove Flare and the product cannot exist”* argument visible at a glance.
+> This table makes the *“remove Flare and the product cannot exist”* argument visible at a glance.
 
 | Flare primitive | Load-bearing role in Aegis | What breaks if removed |
 |---|---|---|
@@ -264,11 +252,11 @@ cd frontend   && npx tsc --noEmit && npm run build
 
 ---
 
-## What was newly built during the hackathon
+## Implementation
 
-Aegis was built from scratch during the six-week Flare Summer Signal programme. Every core component is new work:
+Aegis is an original implementation built from scratch. Every core component was built for this project:
 
-| Component | New work |
+| Component | Description |
 |---|---|
 | **Vault contracts** (Solidity 0.8.27) | `VaultCore`, `PolicyRegistry`, `SolvencyRoot`, `InstructionSender`, `VerifierRole`, `FDCAttestor`, `PMWInstructionRelay` + interfaces — 143 Foundry tests incl. fuzz & invariant tests. |
 | **FCC extension** (Go, in TEE) | `PositionComputer`, `RiskAgent` (XGBoost, 200 trees), `Policy` engine, `SolvencyAttestor`, `ActionExecutor`, FDC + PMW clients — 13 tested packages. |
