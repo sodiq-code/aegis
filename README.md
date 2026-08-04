@@ -2,7 +2,7 @@
 
 # Aegis
 
-**A verifiable, confidential, AI-managed cross-chain treasury protocol for XRP-native institutions on Flare.**
+**The institutional treasury layer for XRP-native DeFi on Flare — confidential positions, verifiable solvency.**
 
 [![Flare](https://img.shields.io/badge/Flare-Coston2-ff4d2e?style=flat-square&logo=flare)](https://flare.network)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
