@@ -204,11 +204,15 @@ export async function POST(request: NextRequest) {
         // Compute a fresh Merkle root from the current position set.
         // In production, these positions come from VaultCore.DepositMade events
         // consumed by the PositionComputer inside the TEE.
-        // For the demo, we use the same position set as the publish script.
+        // For the demo, we use a position set that includes a timestamp-based
+        // nonce to ensure each proof produces a unique Merkle root (the contract
+        // rejects duplicate roots).
+        const now = Math.floor(Date.now() / 1000);
         const positions = [
           { positionId: BigInt(1), depositor: wallet.address, fxrpAmount: BigInt(450_000_000), usdValuation: BigInt(483_922_350) },
           { positionId: BigInt(2), depositor: wallet.address, fxrpAmount: BigInt(200_000_000), usdValuation: BigInt(215_076_600) },
           { positionId: BigInt(3), depositor: wallet.address, fxrpAmount: BigInt(50_000_000),  usdValuation: BigInt(53_769_150) },
+          { positionId: BigInt(now), depositor: wallet.address, fxrpAmount: BigInt(1), usdValuation: BigInt(1) }, // uniqueness nonce
         ];
 
         // Compute leaf hashes: keccak256(abi.encodePacked(positionId, depositor, fxrpAmount, usdValuation))
@@ -247,8 +251,9 @@ export async function POST(request: NextRequest) {
         }
         const newRoot = currentLevel[0];
 
-        // Compute collateral data
-        const totalFxrpCollateral = positions.reduce((sum, p) => sum + p.fxrpAmount, BigInt(0));
+        // Compute collateral data — only count the 3 real positions (not the nonce)
+        const realPositions = positions.slice(0, 3);
+        const totalFxrpCollateral = realPositions.reduce((sum, p) => sum + p.fxrpAmount, BigInt(0));
         const totalLiabilities = BigInt(500_000_000);
         const collateralRatio = (totalFxrpCollateral * BigInt(10000)) / totalLiabilities;
 

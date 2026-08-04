@@ -53,3 +53,5 @@ prisma/*.db
 
 # Misc
 .cache/
+.vercel
+.env*
