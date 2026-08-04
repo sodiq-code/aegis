@@ -23,13 +23,14 @@ import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import {
   FileCheck, CheckCircle2, AlertTriangle, Shield, Eye, EyeOff,
   RefreshCw, Search, Clock, ShieldCheck, Loader2, Info,
-  Fingerprint, FileLock2, ScanSearch, ExternalLink, Link2
+  Fingerprint, FileLock2, ScanSearch, ExternalLink, Link2, Quote
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function AuditView() {
   const { data: solvencyData, loading, error, lastFetched, refetch, requestAttestation } = useSolvencyData();
-  const { verifying, verified, verifyError, verifyProof, resetVerification } = useProofVerification();
+  const { verifying, verified, verifyError, verificationResult, verifyProof, resetVerification } = useProofVerification();
   const { proofs, loading: proofsLoading, refetch: refetchProofs } = useSolvencyProofs();
   const [showProofData, setShowProofData] = useState(false);
   const [attestationLoading, setAttestationLoading] = useState(false);
@@ -129,6 +130,17 @@ export function AuditView() {
               <p className="text-sm text-muted-foreground">Cryptographically verified</p>
               <p className="text-xs text-muted-foreground mt-1">No positions revealed</p>
             </div>
+          </div>
+
+          <Separator className="my-4" />
+
+          {/* Key Quote */}
+          <div className="flex items-start gap-2 text-sm text-muted-foreground italic">
+            <Quote className="h-4 w-4 shrink-0 mt-0.5 text-emerald-500" />
+            <p>
+              An auditor can verify this treasury is solvent without ever seeing a single position.
+              That is the confidentiality-to-verifiability transformation — and it is only possible on Flare.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -258,7 +270,11 @@ export function AuditView() {
                 </Button>
 
                 {verified && (
-                  <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center gap-2 border border-emerald-200 dark:border-emerald-800 animate-in fade-in duration-300">
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center gap-2 border border-emerald-200 dark:border-emerald-800"
+                  >
                     <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                     <div>
                       <p className="font-medium text-emerald-800 dark:text-emerald-200">Proof Verified</p>
@@ -266,18 +282,165 @@ export function AuditView() {
                         The solvency proof is cryptographically valid on Coston2
                       </p>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
 
                 {verifyError && (
-                  <div className="p-3 rounded-lg bg-destructive/10 flex items-center gap-2 border border-destructive/20">
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 rounded-lg bg-destructive/10 flex items-center gap-2 border border-destructive/20"
+                  >
                     <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
                     <div>
                       <p className="font-medium text-destructive">Verification Failed</p>
                       <p className="text-xs text-destructive/80">{verifyError}</p>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
+
+                {/* Detailed Verification Result */}
+                <AnimatePresence>
+                  {verificationResult && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-2"
+                    >
+                      <Separator />
+                      <div className="p-3 rounded-lg bg-muted/50 space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Verification Details
+                        </p>
+                        <div className="text-xs space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Method</span>
+                            <span className="font-medium">{verificationResult.method}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Verified</span>
+                            <Badge variant="outline" className={`text-[10px] ${
+                              verificationResult.verified
+                                ? 'text-emerald-600 border-emerald-300'
+                                : 'text-destructive border-destructive/30'
+                            }`}>
+                              {verificationResult.verified ? 'Yes' : 'No'}
+                            </Badge>
+                          </div>
+                          {verificationResult.proofData && (
+                            <>
+                              <Separator className="my-1" />
+                              <p className="font-medium text-muted-foreground mt-1">Proof Data (on-chain)</p>
+                              <div className="space-y-1 pl-2">
+                                {verificationResult.proofData.merkleRoot && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="text-muted-foreground shrink-0">Merkle Root:</span>
+                                    <code className="font-mono text-[10px] break-all">{verificationResult.proofData.merkleRoot}</code>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Solvent:</span>
+                                  <span className={verificationResult.proofData.solvent ? 'text-emerald-600' : 'text-red-600'}>
+                                    {verificationResult.proofData.solvent ? 'Yes' : 'No'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Collateral Ratio:</span>
+                                  <span className="tabular-nums">
+                                    {verificationResult.proofData.onChainRatio > 0
+                                      ? `${(verificationResult.proofData.onChainRatio / 100).toFixed(0)}%`
+                                      : 'N/A'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Min Ratio:</span>
+                                  <span className="tabular-nums">
+                                    {verificationResult.proofData.minRatio > 0
+                                      ? `${(verificationResult.proofData.minRatio / 100).toFixed(0)}%`
+                                      : '150%'}
+                                  </span>
+                                </div>
+                                {verificationResult.proofData.surplusBps > 0 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">Surplus:</span>
+                                    <span className="tabular-nums text-emerald-600">
+                                      {(verificationResult.proofData.surplusBps / 100).toFixed(2)}%
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Valid:</span>
+                                  <span>{verificationResult.proofData.isValid ? 'Yes' : 'No'}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Voting Round:</span>
+                                  <span className="tabular-nums">{verificationResult.proofData.votingRound.toLocaleString()}</span>
+                                </div>
+                                {verificationResult.proofData.attestor && verificationResult.proofData.attestor.length > 10 && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-muted-foreground">Attestor:</span>
+                                    <BlockExplorerLink type="address" value={verificationResult.proofData.attestor} />
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+
+                          {/* FDC Verification */}
+                          {verificationResult.fdcVerification && (
+                            <>
+                              <Separator className="my-1" />
+                              <p className="font-medium text-muted-foreground mt-1">FDC Verification</p>
+                              <div className="space-y-1 pl-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">FDC Verified:</span>
+                                  <Badge variant="outline" className={`text-[10px] ${
+                                    verificationResult.fdcVerification.verified
+                                      ? 'text-emerald-600 border-emerald-300'
+                                      : 'text-yellow-600 border-yellow-300'
+                                  }`}>
+                                    {verificationResult.fdcVerification.verified ? 'Yes' : 'Pending'}
+                                  </Badge>
+                                </div>
+                                {verificationResult.fdcVerification.votingRound > 0 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">Voting Round:</span>
+                                    <span className="tabular-nums">{verificationResult.fdcVerification.votingRound.toLocaleString()}</span>
+                                  </div>
+                                )}
+                                {verificationResult.fdcVerification.merkleRoot && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="text-muted-foreground shrink-0">FDC Root:</span>
+                                    <code className="font-mono text-[10px] break-all">{verificationResult.fdcVerification.merkleRoot}</code>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+
+                          {/* Full Explanation */}
+                          {verificationResult.details && (
+                            <>
+                              <Separator className="my-1" />
+                              <div className="space-y-1">
+                                <p className="font-medium text-muted-foreground">Explanation</p>
+                                <p className="text-muted-foreground whitespace-pre-line leading-relaxed">
+                                  {verificationResult.details}
+                                </p>
+                              </div>
+                            </>
+                          )}
+
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-muted-foreground">Timestamp:</span>
+                            <span className="tabular-nums">{new Date(verificationResult.timestamp).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <Button
                   onClick={handleRequestAttestation}

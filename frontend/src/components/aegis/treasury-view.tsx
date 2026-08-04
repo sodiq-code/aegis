@@ -17,6 +17,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
 import { useVaultState, useRiskScore, useVaultEvents } from '@/hooks/use-aegis-data';
+import { DepositFlow } from '@/components/aegis/deposit-flow';
+import { ConfidentialPosition } from '@/components/aegis/confidential-position';
+import { RiskRebalance } from '@/components/aegis/risk-rebalance';
+import { FdcAttestationPanel } from '@/components/aegis/fdc-attestation-panel';
+import { SolvencyChart } from '@/components/aegis/solvency-chart';
 import {
   Landmark, AlertTriangle, CheckCircle2, RefreshCw, Shield,
   Activity, Clock, ExternalLink, ShieldAlert, ShieldCheck,
@@ -176,6 +181,12 @@ export function TreasuryView() {
         )}
       </div>
 
+      {/* Deposit Flow */}
+      <DepositFlow />
+
+      {/* Confidential Position */}
+      <ConfidentialPosition />
+
       {/* Risk Score & Collateral */}
       <div className="grid gap-4 md:grid-cols-2">
         {loading && !vaultState ? (
@@ -286,6 +297,12 @@ export function TreasuryView() {
           </>
         )}
       </div>
+
+      {/* Solvency Charts */}
+      <SolvencyChart />
+
+      {/* Risk Rebalance */}
+      <RiskRebalance />
 
       {/* Recent Actions */}
       {loading && !vaultState ? (
@@ -427,6 +444,9 @@ export function TreasuryView() {
           </CardContent>
         </Card>
       )}
+
+      {/* FDC Attestation Infrastructure */}
+      <FdcAttestationPanel />
     </div>
   );
 }

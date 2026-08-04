@@ -321,38 +321,78 @@ export function useRiskScore() {
 
 // ─── Proof Verification Hook ────────────────────────────────────
 
+interface ProofVerificationResult {
+  verified: boolean;
+  method: string;
+  details: string;
+  error?: string;
+  proofData: {
+    merkleRoot: string;
+    surplusBps: number;
+    totalFxrpCollateral: number;
+    totalLiabilities: number;
+    collateralRatio: number;
+    timestamp: number;
+    votingRound: number;
+    attestor: string;
+    isValid: boolean;
+    solvent: boolean;
+    onChainRatio: number;
+    minRatio: number;
+  };
+  fdcVerification: {
+    verified: boolean;
+    merkleRoot: string;
+    votingRound: number;
+  };
+  timestamp: string;
+}
+
 export function useProofVerification() {
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verificationResult, setVerificationResult] = useState<ProofVerificationResult | null>(null);
   const { toast } = useToast();
 
   const verifyProof = useCallback(async (merkleRoot: string) => {
     setVerifying(true);
     setVerifyError(null);
     setVerified(false);
+    setVerificationResult(null);
     try {
-      // Call the FCC extension to verify the proof on-chain
-      const response = await fetch('/api/fcc-extension?endpoint=/api/solvency', {
+      // Call the REAL /api/verify-proof endpoint
+      const response = await fetch('/api/verify-proof', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify', merkleRoot }),
+        body: JSON.stringify({ merkleRoot }),
       });
-      const json = await response.json();
 
-      if (json.reachable && json.verified === true) {
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+
+      const json: ProofVerificationResult = await response.json();
+
+      if (json.error) {
+        throw new Error(typeof json.error === 'string' ? json.error : 'Verification failed');
+      }
+
+      setVerificationResult(json);
+
+      if (json.verified) {
         setVerified(true);
         toast({
           title: 'Proof Verified',
           description: 'The solvency proof is cryptographically valid on Coston2',
         });
       } else {
-        // For demo purposes, simulate verification with the known on-chain proof
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        setVerified(true);
+        // Proof was checked but did not verify — this is NOT an error
+        setVerifyError('Proof did not verify on-chain. The Merkle root does not match the current on-chain proof.');
         toast({
-          title: 'Proof Verified',
-          description: 'The solvency proof is cryptographically valid on Coston2',
+          title: 'Proof Not Verified',
+          description: 'The provided Merkle root does not match the current on-chain solvency proof.',
+          variant: 'destructive',
         });
       }
     } catch (err) {
@@ -371,9 +411,10 @@ export function useProofVerification() {
   const resetVerification = useCallback(() => {
     setVerified(false);
     setVerifyError(null);
+    setVerificationResult(null);
   }, []);
 
-  return { verifying, verified, verifyError, verifyProof, resetVerification };
+  return { verifying, verified, verifyError, verificationResult, verifyProof, resetVerification };
 }
 
 // ─── Vault Events Hook ─────────────────────────────────────────
