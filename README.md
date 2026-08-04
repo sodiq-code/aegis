@@ -25,21 +25,6 @@
 
 ---
 
-## Live resources
-
-| Resource | Link |
-|---|---|
-| **Live dashboard** (working app) | https://aegis-mantle-deploy-s-projects.vercel.app |
-| **GitHub repository** | https://github.com/sodiq-code/aegis |
-| **Network** | Flare **Coston2** testnet (chain ID `114`) |
-| **Coston2 block explorer** | https://coston2-explorer.flare.network |
-| **Public RPC** | `https://coston2-api.flare.network/ext/C/rpc` |
-| **Flare developer docs** | https://dev.flare.network |
-| **Deployed contracts** | 7 Aegis contracts live on Coston2 — see table below |
-| **Test suite** | 143 Foundry tests · 13 Go packages · TypeScript SDK + Next.js build clean |
-
----
-
 ## How Flare is used
 
 > This table makes the *“remove Flare and the product cannot exist”* argument visible at a glance.
