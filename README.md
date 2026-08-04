@@ -13,7 +13,7 @@
 
 ---
 
-> Aegis gives XRP-native institutions three properties no single Flare product offers today — **confidentiality, verifiable solvency, and autonomous cross-chain risk management** — by composing all five enshrined Flare primitives (FAssets, FTSO, FDC, FCC, PMW) in a single, load-bearing stack.
+> Institutional XRP treasuries are forming now — and they need a way to hold, hedge, and prove solvency without exposing positions. Aegis is the only product that makes this possible, by running an AI risk agent inside a Flare TEE and publishing a verifiable solvency proof — so an auditor can confirm a treasury is solvent **without ever seeing a single position**.
 
 ---
 
