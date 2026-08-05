@@ -211,7 +211,9 @@ export function DepositProductionFlow() {
   // Compute the gross XRP amount (net + fees)
   const computeGrossXrp = useCallback((netXrp: number): number => {
     if (!fassetsInfo) return netXrp;
-    const fee = Math.max(netXrp * fassetsInfo.fees.feePercent, fassetsInfo.fees.minimumFeeXrp);
+    // feePercent is in percentage points (e.g. 0.25 means 0.25%); convert to decimal
+    const feeDecimal = fassetsInfo.fees.feePercent / 100;
+    const fee = Math.max(netXrp * feeDecimal, fassetsInfo.fees.minimumFeeXrp);
     return netXrp + fee + fassetsInfo.fees.executorFeeXrp;
   }, [fassetsInfo]);
 
@@ -474,7 +476,7 @@ export function DepositProductionFlow() {
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Fees:</span>
                     <span className="font-mono">
-                      {(fassetsInfo.fees.feePercent * 100).toFixed(2)}% + {fassetsInfo.fees.executorFeeXrp} XRP executor
+                      {fassetsInfo.fees.feePercent.toFixed(2)}% + {fassetsInfo.fees.executorFeeXrp} XRP executor
                     </span>
                   </div>
                   {memoHex && (
