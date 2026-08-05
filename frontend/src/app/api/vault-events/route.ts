@@ -29,19 +29,22 @@ async function rpcCall(method: string, params: unknown[] = []): Promise<unknown>
 }
 
 // Event topic0 signatures (keccak256 of event signatures)
-// These are verified against real on-chain events on Coston2
+// Verified against IVaultCore.sol and ISolvencyRoot.sol source and re-computed
+// with `keccak256(toUtf8Bytes(sig))` — see scripts/ts/check-topics.mjs
 const EVENT_TOPICS = {
   // SolvencyProofPublished(bytes32 indexed merkleRoot, uint256 surplusBps, uint256 totalFxrpCollateral, uint256 collateralRatio, uint256 votingRound, address indexed attestor)
   // Verified on-chain at block 33,565,198 on Coston2
   SolvencyProofPublished: '0x6cd2dab55978f0a59cda7b61611abc0e4edf4c44d09e857d7d33de669273be60',
   // SolvencyProofVerified(bytes32 indexed merkleRoot, bool isValid, uint256 collateralRatio)
   SolvencyProofVerified: '0xc6df40680784542e8461993c1e6c5c4dca0ae5ac8e37352c6cf679a2df15ffcf',
-  // DepositMade(uint256 indexed positionId, address indexed depositor, uint256 amount, uint256 policyId)
-  DepositMade: '0xf7748ed362ae6427631c778e495f7eb63b00c0794b6066744a0cba2c59135a65',
+  // DepositMade(address indexed depositor, uint256 fxrpAmount, uint256 usdValuation, uint256 positionId)
+  // Correct signature from IVaultCore.sol — verified by keccak256("DepositMade(address,uint256,uint256,uint256)")
+  DepositMade: '0xcb3ef4109dcd006671348924f00aac8398190a5ff283d6e470d74581513e1036',
   // PositionRevalued(uint256 indexed positionId, uint256 newValuation, uint256 timestamp)
   PositionRevalued: '0x4cdb25a2be20563cd5111483810c6262c3f2a2dd2a1c2f60aa33404f089770c5',
-  // WithdrawalCompleted(uint256 indexed positionId, address indexed depositor, uint256 amount)
-  WithdrawalCompleted: '0xcd7211ce885c480c8874fe7e69383ad2d60ec453bdb417e7f45222bf44e47266',
+  // WithdrawalCompleted(address indexed depositor, uint256 fxrpAmount, uint256 positionId)
+  // Correct signature from IVaultCore.sol — verified by keccak256("WithdrawalCompleted(address,uint256,uint256)")
+  WithdrawalCompleted: '0x35fc39e80f531e18729cd92611935c06db664fc014e88f0b60f14699df88377b',
   // EmergencyModeEntered(address indexed triggeredBy)
   EmergencyModeEntered: '0x61f653d17bce5d89badcfaa56cc5044c08efe1a77a1cc5d8020588602f2da28b',
   // SafeStateEntered(address indexed triggeredBy)
@@ -247,16 +250,19 @@ async function scanBlockRange(fromBlock: number, toBlock: number): Promise<Vault
   }
   
   // Fetch DepositMade events from VaultCore
+  // Event: DepositMade(address indexed depositor, uint256 fxrpAmount, uint256 usdValuation, uint256 positionId)
+  // topics[0] = event sig, topics[1] = depositor (indexed)
+  // data words: [0]=fxrpAmount, [1]=usdValuation, [2]=positionId
   const depositLogs = await fetchLogsInChunks(vaultCore, fromBlock, toBlock, EVENT_TOPICS.DepositMade);
   for (const log of depositLogs) {
-    const positionId = log.topics[1] ? parseInt(log.topics[1], 16) : 0;
-    const depositor = log.topics[2] ? decodeAddress(log.topics[2]) : '0x0';
-    const amount = decodeUint256(log.data, 0);
-    const policyId = decodeUint256(log.data, 1);
-    
+    const depositor = log.topics[1] ? decodeAddress(log.topics[1]) : '0x0';
+    const fxrpAmount = decodeUint256(log.data, 0);
+    const usdValuation = decodeUint256(log.data, 1);
+    const positionId = decodeUint256(log.data, 2);
+
     const blockNum = parseInt(log.blockNumber, 16);
     const timestamp = await getBlockTimestamp(blockNum);
-    
+
     events.push({
       type: 'FXRP Deposit',
       blockNumber: blockNum,
@@ -267,19 +273,19 @@ async function scanBlockRange(fromBlock: number, toBlock: number): Promise<Vault
         positionId: positionId.toString(),
         depositor: `${depositor.slice(0, 8)}...${depositor.slice(-4)}`,
         depositorFull: depositor,
-        amount: (Number(amount) / 1e6).toFixed(2) + ' FXRP',
-        policyId: policyId.toString(),
+        amount: (Number(fxrpAmount) / 1e6).toFixed(2) + ' FXRP',
+        usdValuation: (Number(usdValuation) / 1e6).toFixed(2) + ' USD',
       },
     });
   }
-  
+
   // Fetch PositionRevalued events from VaultCore
   const revalueLogs = await fetchLogsInChunks(vaultCore, fromBlock, toBlock, EVENT_TOPICS.PositionRevalued);
   for (const log of revalueLogs) {
     const positionId = log.topics[1] ? parseInt(log.topics[1], 16) : 0;
     const newValuation = decodeUint256(log.data, 0);
     const timestampVal = decodeUint256(log.data, 1);
-    
+
     events.push({
       type: 'Position Revalued',
       blockNumber: parseInt(log.blockNumber, 16),

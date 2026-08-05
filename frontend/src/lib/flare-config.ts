@@ -59,6 +59,9 @@ export const AEGIS_CONTRACTS = {
  * Flare System Contract Addresses (Coston2)
  */
 export const FLARE_SYSTEM_CONTRACTS = {
+  // FAssets (FXRP) on Coston2 — discovered via VaultCore.config()
+  AssetManagerFXRP: '0xc1Ca88b937d0b528842F95d5731ffB586f4fbDFA',
+  FXRP: '0x0b6A3645c240605887a5532109323A3E12273dc7',
   FtsoV2: '0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d',
   FdcHub: '0x48aC463d7975828989331F4De43341627b9c5f1D',
   FdcVerification: '0x906507E0B64bcD494Db73bd0459d1C667e14B933',
@@ -67,6 +70,7 @@ export const FLARE_SYSTEM_CONTRACTS = {
   FlareTeeManager: '0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE',
   Fdc2Hub: '0x04dd3Ba33aC798d400bEc42A26F82f9812A421dc',
   Fdc2Verification: '0xA34Ff9be42b2C7782786270a51d33b1baC0462Cd',
+  FlareContractRegistry: '0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019',
 } as const;
 
 /**

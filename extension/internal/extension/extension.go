@@ -2,10 +2,12 @@ package extension
 
 import (
         "bytes"
+        "context"
         "encoding/json"
         "fmt"
         "math/big"
         "net/http"
+        "os"
         "sync"
         "time"
 
@@ -13,6 +15,7 @@ import (
         "extension-scaffold/internal/config"
         "extension-scaffold/internal/executor"
         "extension-scaffold/internal/fdc"
+        "extension-scaffold/internal/onchain"
         "extension-scaffold/internal/pmw"
         "extension-scaffold/internal/policy"
         "extension-scaffold/internal/position"
@@ -20,6 +23,7 @@ import (
         "extension-scaffold/internal/safestate"
         "extension-scaffold/pkg/types"
 
+        "github.com/flare-foundation/go-flare-common/pkg/logger"
         "github.com/flare-foundation/go-flare-common/pkg/tee/instruction"
         "github.com/flare-foundation/go-flare-common/pkg/tee/structs"
         teetypes "github.com/flare-foundation/tee-node/pkg/types"
@@ -43,6 +47,12 @@ type Extension struct {
         RiskAgent        *risk.RiskAgent
         PolicyEngine     *policy.PolicyEngine
         ActionExecutor   *executor.ActionExecutor
+
+        // OnChainPublisher for publishing solvency proofs to SolvencyRoot on Coston2
+        OnChainPublisher *onchain.OnChainPublisher
+
+        // EventListener for consuming VaultCore.DepositMade events
+        EventListener *position.EventListener
 
         // FDC client for external state attestation
         FDCClient        *fdc.FDCClient
@@ -361,6 +371,51 @@ func New(extensionPort, signPort int) *Extension {
 
         fmt.Printf("SafeStateManager initialized — vault mode: %s\n", e.SafeStateManager.GetMode())
 
+        // ─── OnChainPublisher wiring (Phase 1 Step 1) ─────────────────────────
+        // Wire the OnChainPublisher to publish solvency proofs to the SolvencyRoot
+        // contract on Coston2. This replaces the MockAttestationPublisher.
+        //
+        // Configuration comes from environment variables:
+        //   AEGIS_SOLVENCY_ROOT_ADDRESS  (default: 0xf52c1fd632d853ee46a48a82064d3f5d390f057d)
+        //   AEGIS_VERIFIER_PRIVATE_KEY   (required — the TEE verifier key)
+        //   AEGIS_RPC_URL                (default: https://coston2-api.flare.network/ext/C/rpc)
+        publisherConfig := onchain.DefaultOnChainPublisherConfig()
+        publisherConfig.SolvencyRootAddress = getenv("AEGIS_SOLVENCY_ROOT_ADDRESS", "0xf52c1fd632d853ee46a48a82064d3f5d390f057d")
+        publisherConfig.RPCURL = getenv("AEGIS_RPC_URL", "https://coston2-api.flare.network/ext/C/rpc")
+        publisherConfig.VerifierPrivateKey = getenv("AEGIS_VERIFIER_PRIVATE_KEY", "")
+
+        e.OnChainPublisher = onchain.NewOnChainPublisher(publisherConfig)
+        if publisherConfig.VerifierPrivateKey != "" {
+                if err := e.OnChainPublisher.Connect(); err != nil {
+                        fmt.Printf("Warning: OnChainPublisher failed to connect: %v\n", err)
+                } else {
+                        fmt.Printf("OnChainPublisher connected to Coston2 — real solvency proof publishing enabled\n")
+                        // Replace the MockAttestationPublisher with the real OnChainPublisher
+                        // in the RiskAgent (if both are available)
+                        if e.RiskAgent != nil {
+                                e.RiskAgent.SetAttestationPublisher(&onchainPublisherAdapter{publisher: e.OnChainPublisher})
+                                fmt.Printf("RiskAgent attestation publisher → OnChainPublisher (real)\n")
+                        }
+                }
+        } else {
+                fmt.Printf("OnChainPublisher not connected — AEGIS_VERIFIER_PRIVATE_KEY not set (using mock publisher)\n")
+        }
+
+        // ─── EventListener wiring (Phase 1 Step 4) ────────────────────────────
+        // Start the VaultCore event listener to consume DepositMade events.
+        // This feeds real deposit data into the PositionComputer so the Merkle
+        // tree is built from real on-chain positions.
+        vaultCoreAddr := getenv("AEGIS_VAULT_CORE_ADDRESS", "0xcb08be1cc86d3f94c54c64682372e32f669134bc")
+        eventListener, err := position.NewEventListener(publisherConfig.RPCURL, vaultCoreAddr)
+        if err != nil {
+                fmt.Printf("Warning: failed to create VaultCore event listener: %v\n", err)
+        } else {
+                e.EventListener = eventListener
+                fmt.Printf("EventListener connected to VaultCore @ %s — real deposit events will feed PositionComputer\n", vaultCoreAddr)
+                // Start the event listener in a background goroutine
+                go e.startEventListenerLoop()
+        }
+
         mux := http.NewServeMux()
         mux.HandleFunc("GET /state", e.stateHandler)
         mux.HandleFunc("POST /action", e.actionHandler)
@@ -564,4 +619,198 @@ func (e *Extension) getAgentState() risk.AgentState {
                 return risk.AgentState{Phase: risk.PhaseIdle}
         }
         return e.RiskAgent.GetState()
+}
+
+// ─── OnChainPublisher Adapter ───────────────────────────────────────────────
+
+// onchainPublisherAdapter adapts the OnChainPublisher to implement the
+// RiskAgent's AttestationPublisher interface. This lets the RiskAgent
+// publish solvency proofs on-chain via the real SolvencyRoot contract
+// instead of the MockAttestationPublisher.
+type onchainPublisherAdapter struct {
+        publisher *onchain.OnChainPublisher
+}
+
+func (a *onchainPublisherAdapter) PublishSolvencyProof(
+        merkleRoot string,
+        totalCollateral uint64,
+        totalLiabilities uint64,
+        collateralRatio uint64,
+        votingRound uint64,
+) (string, error) {
+        if a.publisher == nil || !a.publisher.IsConnected() {
+                return "", fmt.Errorf("OnChainPublisher not connected")
+        }
+        proof, err := a.publisher.PublishSolvencyProof(
+                merkleRoot,
+                totalCollateral,
+                totalLiabilities,
+                collateralRatio,
+                votingRound,
+        )
+        if err != nil {
+                return "", err
+        }
+        return proof.TxHash.Hex(), nil
+}
+
+func (a *onchainPublisherAdapter) IsConnected() bool {
+        return a.publisher != nil && a.publisher.IsConnected()
+}
+
+// ─── Event Listener Loop ────────────────────────────────────────────────────
+
+// startEventListenerLoop polls the VaultCore contract for new DepositMade
+// events and feeds them into the PositionComputer. This builds the Merkle
+// tree from real on-chain deposits.
+//
+// In production, this would use a websocket subscription for real-time
+// updates. For the Coston2 demo, we poll every 15 seconds.
+func (e *Extension) startEventListenerLoop() {
+        if e.EventListener == nil {
+                return
+        }
+
+        ticker := time.NewTicker(15 * time.Second)
+        defer ticker.Stop()
+
+        // Track the last-processed block to avoid re-processing events
+        lastProcessedBlock := uint64(0)
+
+        for {
+                select {
+                case <-ticker.C:
+                        ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+                        _ = ctx
+                        cancel()
+
+                        // Fetch recent deposit events
+                        // Start from block 33500000 to catch all historical deposits
+                        fromBlock := lastProcessedBlock
+                        if fromBlock == 0 {
+                                fromBlock = 33500000
+                        }
+
+                        events, err := e.EventListener.FetchDepositEvents(fromBlock, nil)
+                        if err != nil {
+                                logger.Warnf("EventListener: failed to fetch deposit events: %v", err)
+                                continue
+                        }
+
+                        if len(events) == 0 {
+                                continue
+                        }
+
+                        // Feed each deposit into the PositionComputer
+                        for _, event := range events {
+                                // Convert the OnChainEvent to a DepositEvent and call PositionComputer.RecordDeposit
+                                // The PositionComputer.RecordDeposit signature takes a *DepositEvent
+                                depositEvent := &position.DepositEvent{
+                                        PositionID:  event.PositionID,
+                                        Depositor:   event.Depositor,
+                                        FxrpAmount:  event.FxrpAmount,
+                                        UsdValue:    event.UsdValue,
+                                        Timestamp:   time.Unix(int64(event.Timestamp), 0),
+                                        BlockNumber: event.BlockNum,
+                                        TxHash:      event.TxHash,
+                                }
+                                if err := e.PositionComputer.RecordDeposit(depositEvent); err != nil {
+                                        logger.Warnf("EventListener: failed to record deposit: %v", err)
+                                } else {
+                                        logger.Infof("EventListener: recorded deposit positionId=%d depositor=%s fxrp=%d",
+                                                event.PositionID, event.Depositor, event.FxrpAmount)
+                                }
+                                if event.BlockNum > lastProcessedBlock {
+                                        lastProcessedBlock = event.BlockNum
+                                }
+                        }
+
+                        // After recording new deposits, compute and publish a fresh solvency proof
+                        if e.OnChainPublisher != nil && e.OnChainPublisher.IsConnected() {
+                                e.publishFreshSolvencyProof()
+                        }
+                }
+        }
+}
+
+// publishFreshSolvencyProof computes a new Merkle root from the current
+// PositionComputer state and publishes it on-chain via the OnChainPublisher.
+func (e *Extension) publishFreshSolvencyProof() {
+        if e.PositionComputer == nil || e.OnChainPublisher == nil {
+                return
+        }
+
+        // Compute the Merkle root from current positions
+        merkleRoot, err := e.PositionComputer.ComputeMerkleRoot()
+        if err != nil {
+                logger.Warnf("publishFreshSolvencyProof: failed to compute Merkle root: %v", err)
+                return
+        }
+
+        // Get the current vault state for collateral data
+        vaultState := e.PositionComputer.GetVaultState()
+        totalCollateral := vaultState.TotalFxrpDeposited
+        // For the demo, liabilities are fixed at 500M FXRP (matches the WARNING state)
+        totalLiabilities := uint64(500_000_000)
+        var collateralRatio uint64
+        if totalLiabilities > 0 {
+                collateralRatio = (totalCollateral * 10000) / totalLiabilities
+        }
+
+        // Get the real current voting round from FlareSystemsManager
+        // (The OnChainPublisher already has the RPC connection; we'd need to add
+        // a getCurrentVotingRound helper. For now, we pass 0 and the publisher
+        // can fill it in. In the next iteration, we'll add a proper read.)
+        // TODO: read FlareSystemsManager.getCurrentVotingEpochId() here
+        votingRound := uint64(0)
+
+        // Compute and store the proof via the SolvencyAttestor
+        if e.SolvencyAttestor != nil {
+                _, err = e.SolvencyAttestor.ComputeAndPublishSolvencyProof(
+                        merkleRoot,
+                        totalCollateral,
+                        totalLiabilities,
+                        collateralRatio,
+                        votingRound,
+                )
+                if err != nil {
+                        logger.Warnf("publishFreshSolvencyProof: SolvencyAttestor compute failed: %v", err)
+                }
+        }
+
+        // Publish on-chain
+        proof, err := e.OnChainPublisher.PublishSolvencyProof(
+                merkleRoot,
+                totalCollateral,
+                totalLiabilities,
+                collateralRatio,
+                votingRound,
+        )
+        if err != nil {
+                logger.Warnf("publishFreshSolvencyProof: on-chain publish failed: %v", err)
+                return
+        }
+
+        logger.Infof("publishFreshSolvencyProof: published root=%s tx=%s block=%d",
+                merkleRoot[:16]+"...", proof.TxHash.Hex(), proof.BlockNumber)
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+// getenv reads an environment variable with a fallback default.
+func getenv(key, fallback string) string {
+        if v := os.Getenv(key); v != "" {
+                return v
+        }
+        return fallback
+}
+
+// StartRiskAgentLoop starts the RiskAgent loop in a background goroutine.
+// This is called from main.go after the extension is created.
+// (Phase 1 Step 2)
+func (e *Extension) StartRiskAgentLoop() {
+        if e.RiskAgent != nil && !e.RiskAgent.IsRunning() {
+                logger.Infof("Starting RiskAgent loop...")
+                e.RiskAgent.Start()
+        }
 }
