@@ -41,9 +41,14 @@ export function TreasuryView() {
   const _totalValuation = vault ? (vault.totalValuation / 1e6).toFixed(2) : '0.00';
   const xrpPrice = vault?.xrpPrice?.toFixed(4) ?? '0.0000';
 
-  // Derive solvency-related values
-  const collateralRatio = vault ? Math.round((vault.totalValuation / Math.max(vault.totalDeposited, 1)) * 100) : 0;
-  const minRatio = 150; // 150% from on-chain config
+  // Use the real on-chain solvency proof's collateral ratio.
+  // The /api/vault-state route reads SolvencyRoot.isSolvent() and returns
+  // collateralRatio as a percentage (e.g. 166.66). This matches the value
+  // the Audit view displays — so Treasury and Audit are always consistent.
+  const collateralRatio = vaultState?.solvency?.collateralRatio
+    ? Math.round(vaultState.solvency.collateralRatio)
+    : 0;
+  const minRatio = 150; // 150% from on-chain getMinCollateralRatio()
   const solvencyStatus = collateralRatio >= minRatio ? 'HEALTHY' : collateralRatio >= minRatio * 0.8 ? 'WARNING' : 'CRITICAL';
 
   return (
