@@ -55,3 +55,4 @@ prisma/*.db
 .cache/
 .vercel
 .env*
+tsconfig.tsbuildinfo

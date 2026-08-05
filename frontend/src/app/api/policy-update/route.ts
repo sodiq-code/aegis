@@ -76,31 +76,37 @@ export async function POST(request: NextRequest) {
       const safeField = (fieldChanged || 'manual update').replace(/[^a-zA-Z0-9_: .-]/g, '');
       const currentPolicy = await policyRegistry.getPolicy(policyId);
 
+      // ethers returns a read-only Result; convert to a plain array so we can
+      // reconstruct the tuple for setPolicy without read-only assignment errors.
+      const p = currentPolicy.map((v: unknown) => v) as unknown[];
+      // allowedAssets (index 11) is an array — deep-copy to a plain array too
+      if (Array.isArray(p[11])) p[11] = Array.from(p[11] as unknown[]);
+
       // Re-construct the tuple with the same values (the contract sets updatedAt = block.timestamp)
-      const policyTuple = {
-        policyId: currentPolicy[0],
-        owner: currentPolicy[1],
-        name: currentPolicy[2],
-        description: currentPolicy[3],
-        riskLevel: currentPolicy[4],
-        isActive: currentPolicy[5],
-        createdAt: currentPolicy[6],
-        updatedAt: currentPolicy[7],
-        maxDrawdownBps: currentPolicy[8],
-        maxSingleExposureBps: currentPolicy[9],
-        hedgeThresholdBps: currentPolicy[10],
-        allowedAssets: currentPolicy[11],
-        maxDepositPerTx: currentPolicy[12],
-        maxWithdrawalPerTx: currentPolicy[13],
-        maxTotalExposure: currentPolicy[14],
-        minCollateralRatio: currentPolicy[15],
-        maxLeverage: currentPolicy[16],
-        withdrawalDelaySeconds: currentPolicy[17],
-        rebalanceThresholdBps: currentPolicy[18],
-        maxSlippageBps: currentPolicy[19],
-        onRiskBreach: currentPolicy[20],
-        onSolvencyWarning: currentPolicy[21],
-      };
+      const policyTuple = [
+        p[0],  // policyId
+        p[1],  // owner
+        p[2],  // name
+        p[3],  // description
+        p[4],  // riskLevel
+        p[5],  // isActive
+        p[6],  // createdAt
+        p[7],  // updatedAt
+        p[8],  // maxDrawdownBps
+        p[9],  // maxSingleExposureBps
+        p[10], // hedgeThresholdBps
+        p[11], // allowedAssets
+        p[12], // maxDepositPerTx
+        p[13], // maxWithdrawalPerTx
+        p[14], // maxTotalExposure
+        p[15], // minCollateralRatio
+        p[16], // maxLeverage
+        p[17], // withdrawalDelaySeconds
+        p[18], // rebalanceThresholdBps
+        p[19], // maxSlippageBps
+        p[20], // onRiskBreach
+        p[21], // onSolvencyWarning
+      ];
 
       const tx = await policyRegistry.setPolicy(policyId, policyTuple);
       const receipt = await tx.wait();

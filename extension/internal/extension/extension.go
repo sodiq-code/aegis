@@ -705,15 +705,19 @@ func (a *onchainPublisherAdapter) PublishSolvencyProof(
         a.mu.Lock()
         defer a.mu.Unlock()
 
-        // Lazy-init: seed lastRoot from the current on-chain root so that
-        // after a daemon restart we don't try to republish the root that is
-        // already stored on-chain.
-        if !a.inited {
-                if cur, err := a.publisher.GetCurrentRoot(); err == nil {
-                        a.lastRoot = cur
+        // Refresh lastRoot from the on-chain state on every call. This lets the
+        // daemon detect when an external publisher (e.g. the dashboard
+        // /api/solvency or /api/rebalance routes) has changed the on-chain root,
+        // so the daemon can republish its own authoritative root. Without this
+        // refresh, a once-cached lastRoot would cause the daemon to skip
+        // publishing forever after any external root change.
+        if cur, err := a.publisher.GetCurrentRoot(); err == nil {
+                if a.inited && cur != a.lastRoot {
+                        fmt.Printf("[TEE] On-chain root changed externally (%s… → %s…) — will republish\n", truncHex(a.lastRoot, 18), truncHex(cur, 18))
                 }
-                a.inited = true
+                a.lastRoot = cur
         }
+        a.inited = true
 
         // Skip republishing an unchanged root — the contract rejects duplicates.
         if merkleRoot != "" && merkleRoot == a.lastRoot {
