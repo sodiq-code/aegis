@@ -93,6 +93,9 @@ export async function sendPaymentToCoreVault(
   const memoData = memoHex.startsWith('0x') ? memoHex.slice(2) : memoHex;
 
   // Build the payment transaction
+  // FAssets direct-mint only needs MemoData (32-byte payload).
+  // MemoType is optional and must be URL-safe when decoded — omit it to
+  // avoid XRPL validation errors with binary prefixes.
   const payment: any = {
     TransactionType: 'Payment',
     Account: wallet.address,
@@ -101,7 +104,6 @@ export async function sendPaymentToCoreVault(
     Memos: [{
       Memo: {
         MemoData: memoData.toUpperCase(),
-        MemoType: '4642505266410018000000000000000000000000000000000000000000000000',
       },
     }],
   };

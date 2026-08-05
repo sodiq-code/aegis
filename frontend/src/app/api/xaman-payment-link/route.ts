@@ -41,16 +41,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the XRPL Payment transaction JSON.
-    // Xaman deep-link format: xumm://sign?txJSON=<base64-encoded-tx-json>
+    // FAssets direct-mint only needs MemoData (32-byte payload).
+    // MemoType is omitted — it must be URL-safe when decoded, which the
+    // binary FAssets prefix is not.
     const txJson = {
       TransactionType: 'Payment',
       Destination: destination,
       Amount: amountDrops,
-      // 32-byte memo hex (no 0x prefix for the MemoData field)
       Memos: memoHex ? [{
         Memo: {
           MemoData: memoHex.replace(/^0x/, '').toLowerCase(),
-          MemoType: '0x4642505266410018000000000000000000000000000000000000000000000000',
         },
       }] : undefined,
     };
