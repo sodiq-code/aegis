@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
-lib/
+
+# Foundry dependency libraries (only contracts/lib, NOT frontend/src/lib)
+/contracts/lib/
 
 # Build outputs
 out/
