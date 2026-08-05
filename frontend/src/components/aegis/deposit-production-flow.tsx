@@ -110,7 +110,7 @@ const MINT_STEP_LABELS: Record<string, { label: string; description: string }> =
 };
 
 export function DepositProductionFlow() {
-  const { status: evmStatus, type: evmType, address: evmAddress } = useWalletStore();
+  const { status: evmStatus, type: evmType, address: walletAddress } = useWalletStore();
   const xaman = useXamanConnection();
 
   const [amountXrp, setAmountXrp] = useState('1');
@@ -124,8 +124,20 @@ export function DepositProductionFlow() {
   const [errorMsg, setErrorMsg] = useState('');
   const [approveTxHash, setApproveTxHash] = useState('');
   const [depositTxHash, setDepositTxHash] = useState('');
+  // The production flow needs BOTH an EVM address (FXRP recipient) and an
+  // XRPL address (payment source). The wallet store only holds one at a time,
+  // so we capture the EVM address when MetaMask connects and keep it in local
+  // state — it survives the subsequent Xaman connection.
+  const [evmRecipientAddress, setEvmRecipientAddress] = useState<string>('');
 
-  const isEvmConnected = evmStatus === 'connected' && evmType === 'evm' && !!evmAddress;
+  // Capture the EVM address whenever MetaMask is connected
+  useEffect(() => {
+    if (evmStatus === 'connected' && evmType === 'evm' && walletAddress) {
+      setEvmRecipientAddress(walletAddress);
+    }
+  }, [evmStatus, evmType, walletAddress]);
+
+  const isEvmConnected = evmStatus === 'connected' && evmType === 'evm' && !!walletAddress;
   const isXrplConnected = xaman.mode === 'connected' && !!xaman.address;
   const isRunning = currentStep !== 'xrpl-connect' && currentStep !== 'complete' && currentStep !== 'error';
 
@@ -205,8 +217,8 @@ export function DepositProductionFlow() {
 
   // Initiate the FAssets mint flow
   const handleInitiateMint = useCallback(async () => {
-    if (!xrplTxHash || !evmAddress) {
-      setErrorMsg('XRPL tx hash and EVM address are required');
+    if (!xrplTxHash || !evmRecipientAddress) {
+      setErrorMsg('XRPL tx hash and EVM recipient address are required');
       setCurrentStep('error');
       return;
     }
@@ -218,7 +230,7 @@ export function DepositProductionFlow() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           xrplTxHash,
-          evmAddress,
+          evmAddress: evmRecipientAddress,
           amountXrp,
           policyId: parseInt(policyId, 10),
         }),
@@ -233,14 +245,14 @@ export function DepositProductionFlow() {
       setErrorMsg(e instanceof Error ? e.message : 'Mint initiation failed');
       setCurrentStep('error');
     }
-  }, [xrplTxHash, evmAddress, amountXrp, policyId]);
+  }, [xrplTxHash, evmRecipientAddress, amountXrp, policyId]);
 
   // Send a MetaMask transaction
   const sendTx = useCallback(async (to: string, data: string): Promise<string> => {
     if (!window.ethereum) throw new Error('MetaMask not installed');
     const txHash = await window.ethereum.request({
       method: 'eth_sendTransaction',
-      params: [{ from: evmAddress, to, data, value: '0x0' }],
+      params: [{ from: evmRecipientAddress, to, data, value: '0x0' }],
     }) as string;
     for (let i = 0; i < 60; i++) {
       await new Promise(r => setTimeout(r, 2000));
@@ -254,13 +266,13 @@ export function DepositProductionFlow() {
       }
     }
     throw new Error(`Transaction not mined: ${txHash}`);
-  }, [evmAddress]);
+  }, [evmRecipientAddress]);
 
   // Approve + deposit FXRP after mint completes
   const handleApproveAndDeposit = useCallback(async () => {
     setErrorMsg('');
     try {
-      if (!isEvmConnected || !evmAddress) {
+      if (!isEvmConnected || !evmRecipientAddress) {
         throw new Error('Connect MetaMask on Coston2 first');
       }
       // Step 1: Prepare deposit calldata
@@ -290,10 +302,10 @@ export function DepositProductionFlow() {
       setErrorMsg(e instanceof Error ? e.message : 'Deposit failed');
       setCurrentStep('error');
     }
-  }, [isEvmConnected, evmAddress, amountXrp, policyId, sendTx]);
+  }, [isEvmConnected, evmRecipientAddress, amountXrp, policyId, sendTx]);
 
   const grossXrp = computeGrossXrp(parseFloat(amountXrp) || 0);
-  const memoHex = evmAddress ? buildMemoHex(evmAddress) : '';
+  const memoHex = evmRecipientAddress ? buildMemoHex(evmRecipientAddress) : '';
 
   return (
     <Card className="transition-shadow hover:shadow-md border-purple-200 dark:border-purple-900">
@@ -499,7 +511,7 @@ export function DepositProductionFlow() {
 
               <Button
                 onClick={handleInitiateMint}
-                disabled={isRunning || !xrplTxHash || !evmAddress || xrplTxHash.length !== 64}
+                disabled={isRunning || !xrplTxHash || !evmRecipientAddress || xrplTxHash.length !== 64}
                 className="w-full gap-2"
               >
                 {isRunning && currentStep === 'minting' ? (
@@ -509,7 +521,7 @@ export function DepositProductionFlow() {
                 )}
                 {isRunning && currentStep === 'minting' ? 'Minting...' : 'Start FAssets Mint'}
               </Button>
-              {!evmAddress && (
+              {!evmRecipientAddress && (
                 <p className="text-[10px] text-amber-700 dark:text-amber-300">
                   Connect MetaMask (top-right) first — FXRP will be minted to your EVM address.
                 </p>
