@@ -151,30 +151,24 @@ export function useRiskScore(refreshIntervalMs = 30000) {
   const fetchRiskScore = useCallback(async () => {
     setLoading(true);
     try {
-      // Try FCC extension first
-      const response = await fetch('/api/fcc-extension', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: '/api/risk' }),
-      });
-
+      // Primary: real risk score from /api/risk-agent (computed from FTSO V2 + on-chain state)
+      const response = await fetch('/api/risk-agent');
       if (response.ok) {
         const result = await response.json();
-        if (result.status === 'success' && result.data) {
-          const risk = result.data;
+        if (typeof result.riskScore === 'number') {
           setData({
-            score: risk.lastScore ?? 0,
-            action: risk.lastAction ?? 'Unknown',
-            confidence: risk.confidence ?? 0,
-            thresholds: risk.thresholds ?? DEFAULT_THRESHOLDS,
-            lastUpdated: risk.lastIteration ?? new Date().toISOString(),
-            source: 'extension',
+            score: result.riskScore,
+            action: result.action || 'Hold',
+            confidence: 0.85,
+            thresholds: DEFAULT_THRESHOLDS,
+            lastUpdated: new Date(result.timestamp * 1000).toISOString(),
+            source: 'risk-agent',
           });
           return;
         }
       }
     } catch {
-      // Extension not reachable — use fallback
+      // risk-agent not reachable — fall through
     }
 
     // Fallback: compute a basic risk score from on-chain vault state
@@ -185,7 +179,6 @@ export function useRiskScore(refreshIntervalMs = 30000) {
         if (vaultData.vault) {
           const ratio = vaultData.solvency?.collateralRatio ?? 0;
           // Simple heuristic: risk score based on collateral ratio
-          // 200% ratio → score 5, 150% → score 25, 120% → score 60, <100% → score 95
           let score: number;
           if (ratio >= 200) score = 5;
           else if (ratio >= 150) score = Math.round(25 + (200 - ratio) * 0.4);
@@ -203,7 +196,7 @@ export function useRiskScore(refreshIntervalMs = 30000) {
           setData({
             score,
             action,
-            confidence: 0.7, // Heuristic confidence
+            confidence: 0.7,
             thresholds: DEFAULT_THRESHOLDS,
             lastUpdated: new Date().toISOString(),
             source: 'fallback',
@@ -215,7 +208,7 @@ export function useRiskScore(refreshIntervalMs = 30000) {
       // Vault state also failed
     }
 
-    // Ultimate fallback: use known on-chain solvency data
+    // Ultimate fallback
     setData({
       score: 7.52,
       action: 'Hold',
