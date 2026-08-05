@@ -575,15 +575,43 @@ async function runPhase2(
     throw e;
   }
 
-  // Call executeDirectMinting
-  const { txHash: mintTxHash, mintedAmount } = await executeDirectMinting(merkleProof, response);
-
-  return {
-    phase: 'complete',
-    finalized: true,
-    mintTxHash,
-    fxrpMinted: mintedAmount,
-  };
+  // Call executeDirectMinting.
+  // If it fails with PaymentAlreadyConfirmed (0x18dce79f), the payment was
+  // already minted (possibly by a bot or a previous attempt). In that case,
+  // check the user's FXRP balance — if they have FXRP, allow them to proceed.
+  try {
+    const { txHash: mintTxHash, mintedAmount } = await executeDirectMinting(merkleProof, response);
+    return {
+      phase: 'complete',
+      finalized: true,
+      mintTxHash,
+      fxrpMinted: mintedAmount,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // PaymentAlreadyConfirmed = 0x18dce79f
+    if (msg.includes('0x18dce79f') || msg.includes('PaymentAlreadyConfirmed')) {
+      // The payment was already confirmed. Check if the user has FXRP.
+      // Extract the evmAddress from the abiEncodedRequest (last 20 bytes)
+      const evmAddress = '0x' + abiEncodedRequest.slice(-40);
+      const config = getFlareConfig();
+      const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+      const fxrpAbi = ['function balanceOf(address) view returns (uint256)'];
+      const fxrp = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.FXRP, fxrpAbi, provider);
+      const balance = await fxrp.balanceOf(evmAddress);
+      if (balance > 0) {
+        // User has FXRP (from this mint or a prior one) — allow proceeding
+        return {
+          phase: 'complete',
+          finalized: true,
+          mintTxHash: '',
+          fxrpMinted: balance.toString(),
+        };
+      }
+      throw new Error('PaymentAlreadyConfirmed: The XRPL payment was already minted, and your address has 0 FXRP. Try with a new XRPL payment.');
+    }
+    throw e;
+  }
 }
 
 // ─── Route Handlers ───────────────────────────────────────────────────────
