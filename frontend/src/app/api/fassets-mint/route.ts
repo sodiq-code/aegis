@@ -683,7 +683,9 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Status mode: return the session state
+  // Legacy status mode: return the session state if it exists in memory
+  // (The stateless design uses POST phase=finalize instead, but this is
+  //  kept for backwards compatibility with warm instances.)
   if (!sessionId) {
     return NextResponse.json(
       { error: 'Missing sessionId. Use ?sessionId=X or ?info=true' },
@@ -693,23 +695,23 @@ export async function GET(request: NextRequest) {
   const session = sessions.get(sessionId);
   if (!session) {
     return NextResponse.json(
-      { error: `Session ${sessionId} not found` },
+      { error: `Session ${sessionId} not found (serverless functions are stateless — use POST phase=finalize for the stateless flow)` },
       { status: 404 }
     );
   }
   return NextResponse.json({
-    sessionId: session.sessionId,
+    sessionId,
+    phase: session.phase,
     step: session.step,
     autoSend: session.autoSend,
     xrplTxHash: session.xrplTxHash,
     evmAddress: session.evmAddress,
     amountXrp: session.amountXrp,
-    policyId: session.policyId,
     votingRound: session.votingRound,
+    abiEncodedRequest: session.abiEncodedRequest,
     fdcRequestTxHash: session.fdcRequestTxHash,
     mintTxHash: session.mintTxHash,
     fxrpMinted: session.fxrpMinted,
     error: session.error,
-    elapsedSec: Math.floor((Date.now() - session.createdAt) / 1000),
   });
 }
