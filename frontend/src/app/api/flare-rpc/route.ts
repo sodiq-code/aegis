@@ -70,6 +70,30 @@ async function handleGet(request: NextRequest) {
     }
   }
 
+  if (method === 'cflrBalance') {
+    const address = url.searchParams.get('address');
+    if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return NextResponse.json({ error: 'Valid address required' }, { status: 400 });
+    }
+    try {
+      const result = await rpcCall('eth_getBalance', [address, 'latest']);
+      const balanceAtomic = BigInt(result).toString();
+      const balance = Number(balanceAtomic) / 1e18;
+      return NextResponse.json({
+        balance,
+        balanceAtomic,
+        address,
+        symbol: 'C2FLR',
+        decimals: 18,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'cflrBalance failed' },
+        { status: 500 }
+      );
+    }
+  }
+
   if (method === 'xrpPrice') {
     try {
       // VaultCore.getXrpUsdPrice() selector: 0xf0ec455a

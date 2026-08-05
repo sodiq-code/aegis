@@ -31,7 +31,7 @@ import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import { useWalletStore } from '@/lib/wallet-auth';
 import {
   Wallet, Loader2, CheckCircle2, ShieldCheck,
-  CircleDollarSign, Quote, AlertCircle, ExternalLink,
+  CircleDollarSign, Quote, AlertCircle, ExternalLink, Fuel,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -94,6 +94,7 @@ export function DepositFlow() {
   const [result, setResult] = useState<DepositResult>({});
   const [errorMsg, setErrorMsg] = useState('');
   const [fxrpBalance, setFxrpBalance] = useState<number | null>(null);
+  const [cflrBalance, setCflrBalance] = useState<number | null>(null);
   const [minDeposit, setMinDeposit] = useState(1);
   const [maxDeposit, setMaxDeposit] = useState(10000);
 
@@ -122,16 +123,21 @@ export function DepositFlow() {
     return () => { mounted = false; };
   }, []);
 
-  // Check FXRP balance when EVM address changes
+  // Check FXRP + CFLR balance when EVM address changes
   const refreshFxrpBalance = useCallback(async () => {
     if (!address) return;
     try {
-      // Read FXRP balance via the flare-rpc route
-      const r = await fetch('/api/flare-rpc?method=balanceOf&address=' + address);
-      if (!r.ok) return;
-      const data = await r.json();
-      if (typeof data.balance === 'number') {
-        setFxrpBalance(data.balance);
+      const [fxrpResp, cflrResp] = await Promise.all([
+        fetch('/api/flare-rpc?method=balanceOf&address=' + address),
+        fetch('/api/flare-rpc?method=cflrBalance&address=' + address),
+      ]);
+      if (fxrpResp.ok) {
+        const data = await fxrpResp.json();
+        if (typeof data.balance === 'number') setFxrpBalance(data.balance);
+      }
+      if (cflrResp.ok) {
+        const data = await cflrResp.json();
+        if (typeof data.balance === 'number') setCflrBalance(data.balance);
       }
     } catch {}
   }, [address]);
@@ -180,14 +186,24 @@ export function DepositFlow() {
         throw new Error('Connect MetaMask on Coston2 first');
       }
 
-      // Step 1: Faucet — get test FXRP if balance is low
-      const balanceResp = await fetch('/api/flare-rpc?method=balanceOf&address=' + address);
-      let currentBalance = 0;
+      // Step 1: Faucet — get test FXRP + CFLR (gas) if either is low
+      const [balanceResp, cflrResp] = await Promise.all([
+        fetch('/api/flare-rpc?method=balanceOf&address=' + address),
+        fetch('/api/flare-rpc?method=cflrBalance&address=' + address),
+      ]);
+      let currentFxrp = 0;
+      let currentCflr = 0;
       if (balanceResp.ok) {
         const b = await balanceResp.json();
-        currentBalance = b.balance || 0;
+        currentFxrp = b.balance || 0;
       }
-      if (currentBalance < parseFloat(amount)) {
+      if (cflrResp.ok) {
+        const b = await cflrResp.json();
+        currentCflr = b.balance || 0;
+      }
+
+      // Drip if FXRP is low OR CFLR (gas) is low (< 0.05 C2FLR)
+      if (currentFxrp < parseFloat(amount) || currentCflr < 0.05) {
         const faucetResp = await fetch('/api/faucet', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -197,8 +213,23 @@ export function DepositFlow() {
           const err = await faucetResp.json().catch(() => ({}));
           throw new Error(err.error || 'Faucet failed');
         }
-        await faucetResp.json();
+        const faucetData = await faucetResp.json();
+        // Wait a moment for balances to update on-chain
+        await new Promise(r => setTimeout(r, 2000));
         await refreshFxrpBalance();
+        // Re-check CFLR after drip
+        if (faucetData.cflrBalance !== undefined) {
+          setCflrBalance(faucetData.cflrBalance);
+        }
+      }
+
+      // Final gas check — if user still has 0 CFLR, we can't submit txs
+      const finalCflr = cflrBalance ?? 0;
+      if (finalCflr < 0.001) {
+        throw new Error(
+          'Insufficient C2FLR for gas. The faucet tried to send gas but it may have failed. ' +
+          'Get test C2FLR from https://coston2.towolabs.com/faucet or https://faucet.flare.network then try again.'
+        );
       }
 
       // Step 2: Prepare deposit calldata
@@ -242,10 +273,21 @@ export function DepositFlow() {
       setCurrentStep('complete');
       await refreshFxrpBalance();
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Deposit failed');
+      const err = e as { code?: number; message?: string };
+      let msg = err.message || 'Deposit failed';
+      // MetaMask error code 4001 = user rejected
+      if (err.code === 4001) {
+        msg = 'Transaction rejected in MetaMask. Please approve the transaction to continue.';
+      }
+      // MetaMask insufficient funds
+      if (msg.includes('insufficient funds') || msg.includes('gas required exceeds allowance')) {
+        msg = 'Insufficient C2FLR for gas. Get test C2FLR from https://faucet.flare.network then try again. ' +
+              '(The faucet should have dripped 0.5 C2FLR — check your MetaMask balance.)';
+      }
+      setErrorMsg(msg);
       setCurrentStep('error');
     }
-  }, [address, amount, policyId, isEvmConnected, sendTx, refreshFxrpBalance]);
+  }, [address, amount, policyId, isEvmConnected, sendTx, refreshFxrpBalance, cflrBalance]);
 
   const handleReset = useCallback(() => {
     setCurrentStep('idle');
@@ -280,6 +322,18 @@ export function DepositFlow() {
           </div>
         )}
 
+        {/* Gas warning — CFLR balance too low */}
+        {isEvmConnected && cflrBalance !== null && cflrBalance < 0.05 && (
+          <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800 flex items-start gap-2">
+            <Fuel className="h-4 w-4 text-orange-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-orange-700 dark:text-orange-300 space-y-1">
+              <p className="font-medium">Low gas balance: {cflrBalance.toFixed(4)} C2FLR</p>
+              <p>You need C2FLR (native gas) to sign approve + deposit transactions. Click "Get FXRP & Deposit" — the faucet will drip 0.5 C2FLR for gas automatically.</p>
+              <p className="text-[10px]">If gas is still 0 after faucet, get C2FLR from <a href="https://faucet.flare.network" target="_blank" rel="noopener noreferrer" className="underline font-medium">faucet.flare.network</a></p>
+            </div>
+          </div>
+        )}
+
         {/* Amount + Policy Picker */}
         <div className="space-y-3">
           <div className="space-y-2">
@@ -288,7 +342,7 @@ export function DepositFlow() {
               Amount (FXRP)
               {fxrpBalance !== null && (
                 <span className="text-xs text-muted-foreground ml-auto">
-                  Balance: {fxrpBalance.toFixed(2)} FXRP
+                  FXRP: {fxrpBalance.toFixed(2)} · C2FLR: {cflrBalance !== null ? cflrBalance.toFixed(4) : '...'}
                 </span>
               )}
             </Label>
@@ -346,7 +400,9 @@ export function DepositFlow() {
               <Wallet className="h-4 w-4" />
             )}
             {isEvmConnected
-              ? (fxrpBalance !== null && fxrpBalance >= parseFloat(amount) ? 'Deposit FXRP' : 'Get FXRP & Deposit')
+              ? (fxrpBalance !== null && fxrpBalance >= parseFloat(amount) && cflrBalance !== null && cflrBalance >= 0.05
+                  ? 'Deposit FXRP'
+                  : 'Get FXRP + Gas & Deposit')
               : 'Connect MetaMask to Deposit'}
           </Button>
         </div>

@@ -35,7 +35,7 @@ import { useXamanConnection } from '@/lib/xaman-wallet';
 import {
   Wallet, Loader2, CheckCircle2, ShieldCheck, XCircle,
   CircleDollarSign, AlertCircle, ExternalLink, QrCode, Link2,
-  Zap, Clock, ArrowRight,
+  Zap, Clock, ArrowRight, Fuel,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -277,6 +277,38 @@ export function DepositProductionFlow() {
       if (!isEvmConnected || !evmRecipientAddress) {
         throw new Error('Connect MetaMask on Coston2 first');
       }
+
+      // Check CFLR (gas) balance — user needs gas for approve + deposit
+      const cflrResp = await fetch('/api/flare-rpc?method=cflrBalance&address=' + evmRecipientAddress);
+      let cflrBal = 0;
+      if (cflrResp.ok) {
+        const d = await cflrResp.json();
+        cflrBal = d.balance || 0;
+      }
+
+      // If gas is low, trigger faucet (drips both FXRP + CFLR)
+      if (cflrBal < 0.05) {
+        const faucetResp = await fetch('/api/faucet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: evmRecipientAddress }),
+        });
+        if (faucetResp.ok) {
+          const faucetData = await faucetResp.json();
+          if (faucetData.cflrBalance !== undefined) {
+            cflrBal = faucetData.cflrBalance;
+          }
+          // Wait for balance to propagate
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+
+      if (cflrBal < 0.001) {
+        throw new Error(
+          'Insufficient C2FLR for gas. Get test C2FLR from https://faucet.flare.network then try again.'
+        );
+      }
+
       // Step 1: Prepare deposit calldata
       const prepResp = await fetch('/api/deposit', {
         method: 'POST',
@@ -301,7 +333,15 @@ export function DepositProductionFlow() {
 
       setCurrentStep('complete');
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Deposit failed');
+      const err = e as { code?: number; message?: string };
+      let msg = err.message || 'Deposit failed';
+      if (err.code === 4001) {
+        msg = 'Transaction rejected in MetaMask. Please approve the transaction to continue.';
+      }
+      if (msg.includes('insufficient funds') || msg.includes('gas required exceeds allowance')) {
+        msg = 'Insufficient C2FLR for gas. Get test C2FLR from https://faucet.flare.network then try again.';
+      }
+      setErrorMsg(msg);
       setCurrentStep('error');
     }
   }, [isEvmConnected, evmRecipientAddress, amountXrp, policyId, sendTx]);
@@ -641,10 +681,17 @@ export function DepositProductionFlow() {
                     <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-700 dark:text-amber-300">
                       Connect MetaMask on Coston2 (top-right) to approve + deposit your FXRP.
+                      You need C2FLR (gas) — the faucet will drip 0.5 C2FLR automatically when you click below.
                     </p>
                   </div>
                 ) : (
                   <>
+                    <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 flex items-start gap-2">
+                      <Fuel className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        Clicking below will automatically get test FXRP + C2FLR gas (if needed), then sign approve + deposit via MetaMask.
+                      </p>
+                    </div>
                     <Button
                       onClick={handleApproveAndDeposit}
                       disabled={isRunning}

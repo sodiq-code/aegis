@@ -21,6 +21,8 @@ import { getFlareConfig, AEGIS_CONTRACTS, FLARE_SYSTEM_CONTRACTS } from '@/lib/f
 
 const FAUCET_AMOUNT = BigInt(5_000_000); // 5 FXRP (6 decimals)
 const MINIMUM_REMAINING_FOR_VERIFIER = BigInt(1_000_000); // Keep at least 1 FXRP for verifier
+const CFLR_GAS_DRIP = BigInt(500_000_000_000_000_000); // 0.5 C2FLR for gas (approve + deposit ~0.05 CFLR each)
+const CFLR_MINIMUM_REMAINING = BigInt(10_000_000_000_000_000_000); // Keep at least 10 C2FLR for verifier
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,53 +69,100 @@ export async function POST(request: NextRequest) {
     ];
     const fxrp = new Contract(FLARE_SYSTEM_CONTRACTS.FXRP, fxrpAbi, wallet);
 
-    // Check verifier balance
-    const verifierBalance = await fxrp.balanceOf(wallet.address);
-    if (verifierBalance < FAUCET_AMOUNT + MINIMUM_REMAINING_FOR_VERIFIER) {
+    // Check verifier FXRP balance
+    const verifierFxrpBalance = await fxrp.balanceOf(wallet.address);
+    if (verifierFxrpBalance < FAUCET_AMOUNT + MINIMUM_REMAINING_FOR_VERIFIER) {
       return NextResponse.json(
         {
           error: 'Faucet depleted — verifier FXRP balance too low',
-          verifierBalance: verifierBalance.toString(),
+          verifierBalance: verifierFxrpBalance.toString(),
           required: (FAUCET_AMOUNT + MINIMUM_REMAINING_FOR_VERIFIER).toString(),
         },
         { status: 503 }
       );
     }
 
-    // Check user's current FXRP balance (don't drip if they already have enough)
-    const userBalance = await fxrp.balanceOf(address);
-    if (userBalance >= FAUCET_AMOUNT) {
+    // Check verifier CFLR (native gas) balance
+    const verifierCflrBalance = await provider.getBalance(wallet.address);
+
+    // Check user's current balances
+    const userFxrpBalance = await fxrp.balanceOf(address);
+    const userCflrBalance = await provider.getBalance(address);
+
+    const needsFxrp = userFxrpBalance < FAUCET_AMOUNT;
+    const needsCflr = userCflrBalance < CFLR_GAS_DRIP; // drip if < 0.5 C2FLR
+
+    // If user already has enough of both, skip
+    if (!needsFxrp && !needsCflr) {
       return NextResponse.json({
         txHash: null,
         amount: 0,
-        balance: Number(userBalance) / 1e6,
-        message: `Address already has ${Number(userBalance) / 1e6} FXRP — no faucet drip needed`,
+        balance: Number(userFxrpBalance) / 1e6,
+        cflrBalance: Number(userCflrBalance) / 1e18,
+        message: `Address already has ${Number(userFxrpBalance) / 1e6} FXRP + ${Number(userCflrBalance) / 1e18} C2FLR — no drip needed`,
         skipped: true,
       });
     }
 
-    // Transfer FXRP to the user
-    const tx = await fxrp.transfer(address, FAUCET_AMOUNT);
-    const receipt = await tx.wait();
+    const txHashes: string[] = [];
+    let fxrpTxHash: string | null = null;
+    let cflrTxHash: string | null = null;
+    let lastBlockNumber: number | undefined;
 
-    if (receipt?.status !== 1) {
-      return NextResponse.json(
-        { error: 'Faucet transfer reverted on-chain', txHash: tx.hash },
-        { status: 500 }
-      );
+    // Step 1: Drip CFLR (gas) first — without gas, nothing else works
+    if (needsCflr && verifierCflrBalance > CFLR_GAS_DRIP + CFLR_MINIMUM_REMAINING) {
+      try {
+        const cflrTx = await wallet.sendTransaction({
+          to: address,
+          value: CFLR_GAS_DRIP,
+        });
+        const cflrReceipt = await cflrTx.wait();
+        if (cflrReceipt?.status === 1) {
+          cflrTxHash = cflrTx.hash;
+          txHashes.push(cflrTx.hash);
+          lastBlockNumber = cflrReceipt.blockNumber;
+        }
+      } catch {
+        // Non-fatal — user might already have gas from another source
+      }
     }
 
-    const newBalance = await fxrp.balanceOf(address);
+    // Step 2: Drip FXRP
+    if (needsFxrp) {
+      const fxrpTx = await fxrp.transfer(address, FAUCET_AMOUNT);
+      const fxrpReceipt = await fxrpTx.wait();
+      if (fxrpReceipt?.status !== 1) {
+        return NextResponse.json(
+          { error: 'Faucet FXRP transfer reverted on-chain', txHash: fxrpTx.hash },
+          { status: 500 }
+        );
+      }
+      fxrpTxHash = fxrpTx.hash;
+      txHashes.push(fxrpTx.hash);
+      lastBlockNumber = fxrpReceipt.blockNumber;
+    }
+
+    const newFxrpBalance = await fxrp.balanceOf(address);
+    const newCflrBalance = await provider.getBalance(address);
+
+    const parts: string[] = [];
+    if (needsFxrp) parts.push(`${Number(FAUCET_AMOUNT) / 1e6} FXRP`);
+    if (cflrTxHash) parts.push(`${Number(CFLR_GAS_DRIP) / 1e18} C2FLR (gas)`);
 
     return NextResponse.json({
-      txHash: tx.hash,
-      blockNumber: receipt.blockNumber,
-      amount: Number(FAUCET_AMOUNT) / 1e6,
-      balance: Number(newBalance) / 1e6,
+      txHash: fxrpTxHash || txHashes[0] || null,
+      txHashes,
+      fxrpTxHash,
+      cflrTxHash,
+      blockNumber: lastBlockNumber,
+      amount: needsFxrp ? Number(FAUCET_AMOUNT) / 1e6 : 0,
+      balance: Number(newFxrpBalance) / 1e6,
+      cflrBalance: Number(newCflrBalance) / 1e18,
+      gasDrip: cflrTxHash ? Number(CFLR_GAS_DRIP) / 1e18 : 0,
       symbol: 'FXRP',
       from: wallet.address,
       to: address,
-      message: `Transferred ${Number(FAUCET_AMOUNT) / 1e6} FXRP to ${address.slice(0, 8)}...${address.slice(-4)}`,
+      message: `Dripped ${parts.join(' + ')} to ${address.slice(0, 8)}...${address.slice(-4)}`,
     });
   } catch (error) {
     return NextResponse.json(
@@ -137,15 +186,17 @@ export async function GET() {
     const fxrpAbi = ['function balanceOf(address) view returns (uint256)'];
     const fxrp = new Contract(FLARE_SYSTEM_CONTRACTS.FXRP, fxrpAbi, provider);
 
-    // Read verifier balance (verifier address derived from key — but we can't derive on GET)
-    // So we use the known verifier address from the on-chain attestation.
+    // Read verifier balances
     const verifierAddress = '0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4';
-    const balance = await fxrp.balanceOf(verifierAddress);
+    const fxrpBalance = await fxrp.balanceOf(verifierAddress);
+    const cflrBalance = await provider.getBalance(verifierAddress);
 
     return NextResponse.json({
-      available: Number(balance) / 1e6,
+      available: Number(fxrpBalance) / 1e6,
+      cflrAvailable: Number(cflrBalance) / 1e18,
       symbol: 'FXRP',
       dripAmount: Number(FAUCET_AMOUNT) / 1e6,
+      gasDripAmount: Number(CFLR_GAS_DRIP) / 1e18,
       verifierAddress,
       contractAddress: FLARE_SYSTEM_CONTRACTS.FXRP,
     });
