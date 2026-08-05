@@ -5,15 +5,14 @@
  *
  * Steps:
  *   1. Connect Xaman wallet (QR code or manual address entry)
- *   2. Specify amount (XRP) + risk policy
- *   3. Send XRPL payment to FAssets Core Vault (via Xaman or manually)
+ *   2. Connect MetaMask (EVM) — needed for FXRP recipient
+ *   3. Send XRPL payment to FAssets Core Vault (via Xaman deep link or manually)
  *   4. Paste XRPL tx hash
  *   5. POST /api/fassets-mint → initiates FDC attestation + executeDirectMinting
  *   6. Poll GET /api/fassets-mint?sessionId=X for status (~2-4 minutes)
- *   7. Connect MetaMask (EVM) to receive FXRP
- *   8. Sign approve(VaultCore, amount) via MetaMask
- *   9. Sign depositFXRP(amount, policyId) via MetaMask
- *  10. Done — TEE daemon picks up DepositMade event and republishes solvency root
+ *   7. Sign approve(VaultCore, amount) via MetaMask
+ *   8. Sign depositFXRP(amount, policyId) via MetaMask
+ *   9. Done — TEE daemon picks up DepositMade event and republishes solvency root
  *
  * Reference: https://dev.flare.network/fassets/developer-guides/
  */
@@ -27,15 +26,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
-import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
-import { AEGIS_CONTRACTS, FLARE_SYSTEM_CONTRACTS } from '@/lib/flare-config';
 import { useWalletStore } from '@/lib/wallet-auth';
 import { useXamanConnection } from '@/lib/xaman-wallet';
 import {
   Wallet, Loader2, CheckCircle2, ShieldCheck, XCircle,
-  CircleDollarSign, AlertCircle, ExternalLink, QrCode, Link2,
-  Zap, Clock, ArrowRight, Fuel,
+  AlertCircle, ExternalLink, QrCode, Link2,
+  Zap, Clock, ArrowRight, Fuel, Copy, Check, Smartphone, Info,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -89,14 +85,8 @@ interface MintSession {
   elapsedSec?: number;
 }
 
-const STEP_ORDER: ProdStep[] = [
-  'xrpl-connect', 'xrpl-payment', 'minting',
-  'evm-connect', 'approving', 'depositing', 'complete',
-];
-
-function getStepIndex(step: ProdStep): number {
-  return STEP_ORDER.indexOf(step);
-}
+// User's known XRP testnet wallet (pre-filled as a convenience default)
+const DEFAULT_XRPL_WALLET = 'r3RRc87FzPBvJD91Y3F41ZgrwAkZzKhm1o';
 
 const MINT_STEP_LABELS: Record<string, { label: string; description: string }> = {
   initiated:              { label: 'Initiated',              description: 'Mint flow started' },
@@ -109,16 +99,39 @@ const MINT_STEP_LABELS: Record<string, { label: string; description: string }> =
   error:                  { label: 'Error',                  description: 'Mint failed' },
 };
 
+// ─── Copy hook ────────────────────────────────────────────────────────────
+function useCopyToClipboard() {
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = useCallback((text: string, id: string) => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 2000);
+    }).catch(() => {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+      setCopied(id);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }, []);
+  return { copied, copy };
+}
+
 export function DepositProductionFlow() {
-  const { status: evmStatus, type: evmType, address: walletAddress } = useWalletStore();
+  const { status: evmStatus, type: evmType, address: walletAddress, connectEvm, balance: evmBalance } = useWalletStore();
   const xaman = useXamanConnection();
+  const { copied, copy } = useCopyToClipboard();
 
   const [amountXrp, setAmountXrp] = useState('1');
   const [policyId, setPolicyId] = useState('2');
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [fassetsInfo, setFassetsInfo] = useState<FassetsInfo | null>(null);
   const [xrplTxHash, setXrplTxHash] = useState('');
-  const [manualXrplAddress, setManualXrplAddress] = useState('');
+  const [manualXrplAddress, setManualXrplAddress] = useState(DEFAULT_XRPL_WALLET);
   const [currentStep, setCurrentStep] = useState<ProdStep>('xrpl-connect');
   const [mintSession, setMintSession] = useState<MintSession | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -129,6 +142,11 @@ export function DepositProductionFlow() {
   // so we capture the EVM address when MetaMask connects and keep it in local
   // state — it survives the subsequent Xaman connection.
   const [evmRecipientAddress, setEvmRecipientAddress] = useState<string>('');
+  const [xamanConfigured, setXamanConfigured] = useState<boolean | null>(null);
+  const [xamanPayUrl, setXamanPayUrl] = useState<string | null>(null);
+  const [buildingPayLink, setBuildingPayLink] = useState(false);
+  const [faucetStatus, setFaucetStatus] = useState<string>('');
+  const [faucetLoading, setFaucetLoading] = useState(false);
 
   // Capture the EVM address whenever MetaMask is connected
   useEffect(() => {
@@ -140,6 +158,14 @@ export function DepositProductionFlow() {
   const isEvmConnected = evmStatus === 'connected' && evmType === 'evm' && !!walletAddress;
   const isXrplConnected = xaman.mode === 'connected' && !!xaman.address;
   const isRunning = currentStep !== 'xrpl-connect' && currentStep !== 'complete' && currentStep !== 'error';
+
+  // Check if Xaman API key is configured (server-side)
+  useEffect(() => {
+    fetch('/api/xaman-config')
+      .then(r => r.json())
+      .then(data => setXamanConfigured(!!data.configured))
+      .catch(() => setXamanConfigured(false));
+  }, []);
 
   // Load FAssets info + policies on mount
   useEffect(() => {
@@ -211,11 +237,62 @@ export function DepositProductionFlow() {
   // Compute the gross XRP amount (net + fees)
   const computeGrossXrp = useCallback((netXrp: number): number => {
     if (!fassetsInfo) return netXrp;
-    // feePercent is in percentage points (e.g. 0.25 means 0.25%); convert to decimal
     const feeDecimal = fassetsInfo.fees.feePercent / 100;
     const fee = Math.max(netXrp * feeDecimal, fassetsInfo.fees.minimumFeeXrp);
     return netXrp + fee + fassetsInfo.fees.executorFeeXrp;
   }, [fassetsInfo]);
+
+  // Build a Xaman payment deep-link URL (no API key required)
+  const handleBuildXamanPayLink = useCallback(async () => {
+    if (!fassetsInfo || !evmRecipientAddress || !isXrplConnected) return;
+    setBuildingPayLink(true);
+    setErrorMsg('');
+    try {
+      const gross = computeGrossXrp(parseFloat(amountXrp) || 0);
+      const amountDrops = String(Math.round(gross * 1_000_000)); // XRP → drops
+      const memoHex = buildMemoHex(evmRecipientAddress);
+      const resp = await fetch('/api/xaman-payment-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          destination: fassetsInfo.coreVaultAddress,
+          amountDrops,
+          memoHex,
+        }),
+      });
+      if (!resp.ok) throw new Error('Failed to build Xaman payment link');
+      const data = await resp.json();
+      setXamanPayUrl(data.url);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Failed to build Xaman link');
+    } finally {
+      setBuildingPayLink(false);
+    }
+  }, [fassetsInfo, evmRecipientAddress, isXrplConnected, amountXrp, computeGrossXrp, buildMemoHex]);
+
+  // Drip test C2FLR + FXRP from our faucet
+  const handleGetGas = useCallback(async () => {
+    if (!evmRecipientAddress) return;
+    setFaucetLoading(true);
+    setFaucetStatus('');
+    try {
+      const resp = await fetch('/api/faucet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: evmRecipientAddress }),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setFaucetStatus(`✓ Received ${data.fxrpDriped || 5} FXRP + ${data.cflrDriped || 0.5} C2FLR for gas`);
+      } else {
+        setFaucetStatus(`✗ ${data.error || 'Faucet failed'}`);
+      }
+    } catch (e) {
+      setFaucetStatus(`✗ ${e instanceof Error ? e.message : 'Network error'}`);
+    } finally {
+      setFaucetLoading(false);
+    }
+  }, [evmRecipientAddress]);
 
   // Initiate the FAssets mint flow
   const handleInitiateMint = useCallback(async () => {
@@ -298,7 +375,6 @@ export function DepositProductionFlow() {
           if (faucetData.cflrBalance !== undefined) {
             cflrBal = faucetData.cflrBalance;
           }
-          // Wait for balance to propagate
           await new Promise(r => setTimeout(r, 2000));
         }
       }
@@ -348,6 +424,17 @@ export function DepositProductionFlow() {
 
   const grossXrp = computeGrossXrp(parseFloat(amountXrp) || 0);
   const memoHex = evmRecipientAddress ? buildMemoHex(evmRecipientAddress) : '';
+  const amountDrops = Math.round(grossXrp * 1_000_000);
+
+  // Determine why the "Start FAssets Mint" button is disabled
+  const mintButtonDisabledReason = (() => {
+    if (isRunning) return null; // not disabled
+    if (!isXrplConnected) return 'Connect your XRPL wallet in Step 1 first';
+    if (!evmRecipientAddress) return 'Connect MetaMask to receive FXRP';
+    if (!xrplTxHash) return 'Paste the XRPL transaction hash after sending payment';
+    if (xrplTxHash.length !== 64) return `Tx hash must be 64 hex chars (currently ${xrplTxHash.length})`;
+    return null;
+  })();
 
   return (
     <Card className="transition-shadow hover:shadow-md border-purple-200 dark:border-purple-900">
@@ -371,7 +458,7 @@ export function DepositProductionFlow() {
             {isXrplConnected ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             ) : (
-              <div className="h-5 w-5 rounded-full border-2 border-purple-400" />
+              <div className="h-5 w-5 rounded-full border-2 border-purple-400 flex items-center justify-center text-[10px] font-bold text-purple-600">1</div>
             )}
             <h4 className="font-medium text-sm">Step 1: Connect XRPL Wallet (Xaman)</h4>
           </div>
@@ -394,39 +481,56 @@ export function DepositProductionFlow() {
                     Cancel
                   </Button>
                 </div>
-              ) : xaman.mode === 'manual' || (xaman.mode === 'idle' && !xaman.session) ? (
+              ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground">
-                    Enter your Xaman XRPL address (starts with <code>r</code>), or
-                    click <strong>Connect with QR</strong> to try the real Xaman SDK:
+                    Enter your Xaman XRPL address (starts with <code>r</code>).
+                    We&apos;ve pre-filled your testnet wallet for convenience:
                   </p>
                   <div className="flex gap-2">
                     <Input
                       placeholder="r..."
                       value={manualXrplAddress}
                       onChange={(e) => setManualXrplAddress(e.target.value)}
-                      className="flex-1"
+                      className="flex-1 font-mono text-xs"
                     />
                     <Button
                       size="sm"
                       onClick={() => xaman.connectManual(manualXrplAddress)}
                       disabled={!manualXrplAddress}
+                      className="gap-1"
                     >
-                      <Link2 className="h-4 w-4 mr-1" /> Connect Manual
+                      <Link2 className="h-4 w-4" /> Connect
                     </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={xaman.connectWithQr}
-                    className="w-full gap-2"
-                  >
-                    <QrCode className="h-4 w-4" /> Connect with Xaman QR
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {xamanConfigured === true && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={xaman.connectWithQr}
+                        className="gap-2 flex-1"
+                      >
+                        <QrCode className="h-4 w-4" /> Connect with Xaman QR
+                      </Button>
+                    )}
+                    {xamanConfigured === false && (
+                      <div className="text-[10px] text-amber-700 dark:text-amber-300 italic flex items-center gap-1">
+                        <Info className="h-3 w-3" />
+                        Xaman QR mode requires a server-side API key — using manual entry instead.
+                      </div>
+                    )}
+                  </div>
+                  {xaman.error && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">{xaman.error}</p>
+                  )}
+                  <div className="text-[10px] text-muted-foreground bg-muted/50 p-2 rounded-md">
+                    <strong>Don&apos;t have Xaman?</strong> Install it from{' '}
+                    <a href="https://xumm.app" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">xumm.app</a>
+                    {' '}or use any XRPL testnet wallet. Get test XRP from{' '}
+                    <a href="https://faucet.tequ.dev/" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">faucet.tequ.dev</a>.
+                  </div>
                 </div>
-              ) : null}
-              {xaman.error && (
-                <p className="text-xs text-amber-700 dark:text-amber-300">{xaman.error}</p>
               )}
             </div>
           )}
@@ -436,6 +540,13 @@ export function DepositProductionFlow() {
               <p className="flex items-center gap-1">
                 <span className="font-medium">XRPL Address:</span>
                 <code className="font-mono">{xaman.address?.slice(0, 12)}...{xaman.address?.slice(-6)}</code>
+                <button
+                  onClick={() => xaman.address && copy(xaman.address, 'xrpl-addr')}
+                  className="text-muted-foreground hover:text-foreground ml-1"
+                  title="Copy full address"
+                >
+                  {copied === 'xrpl-addr' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                </button>
                 <a
                   href={`https://testnet.xrpl.org/accounts/${xaman.address}`}
                   target="_blank"
@@ -459,7 +570,7 @@ export function DepositProductionFlow() {
             {currentStep !== 'xrpl-payment' && currentStep !== 'xrpl-connect' && isXrplConnected ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             ) : currentStep === 'xrpl-payment' ? (
-              <div className="h-5 w-5 rounded-full border-2 border-purple-400" />
+              <div className="h-5 w-5 rounded-full border-2 border-purple-400 flex items-center justify-center text-[10px] font-bold text-purple-600">2</div>
             ) : (
               <div className="h-5 w-5 rounded-full border-2 border-muted" />
             )}
@@ -467,7 +578,48 @@ export function DepositProductionFlow() {
           </div>
 
           {isXrplConnected && (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* MetaMask connection status — required for FXRP recipient */}
+              <div className={`p-3 rounded-lg border-2 transition-colors ${
+                isEvmConnected
+                  ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30'
+                  : 'border-amber-300 bg-amber-50 dark:bg-amber-950/30'
+              }`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Wallet className={`h-4 w-4 ${isEvmConnected ? 'text-emerald-600' : 'text-amber-600'}`} />
+                    <span className="font-medium">
+                      {isEvmConnected ? 'MetaMask connected (FXRP recipient)' : 'MetaMask required (FXRP recipient)'}
+                    </span>
+                  </div>
+                  {isEvmConnected ? (
+                    <div className="flex items-center gap-2 text-xs">
+                      <code className="font-mono">{evmRecipientAddress.slice(0, 8)}...{evmRecipientAddress.slice(-4)}</code>
+                      <button
+                        onClick={() => copy(evmRecipientAddress, 'evm-addr')}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Copy EVM address"
+                      >
+                        {copied === 'evm-addr' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                      </button>
+                      {evmBalance && (
+                        <Badge variant="outline" className="text-[10px]">{evmBalance} C2FLR</Badge>
+                      )}
+                    </div>
+                  ) : (
+                    <Button size="sm" onClick={connectEvm} className="gap-2">
+                      <Wallet className="h-4 w-4" /> Connect MetaMask
+                    </Button>
+                  )}
+                </div>
+                {!isEvmConnected && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-2">
+                    MetaMask is needed to receive the minted FXRP and to sign the vault deposit.
+                    Connect it now or use the button in the top-right corner.
+                  </p>
+                )}
+              </div>
+
               {/* Amount + Policy */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
@@ -482,6 +634,7 @@ export function DepositProductionFlow() {
                     step="0.1"
                     min="0.21"
                   />
+                  <p className="text-[10px] text-muted-foreground">Minimum 0.21 XRP (FAssets lot size)</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="prod-policy" className="text-xs">Risk Policy</Label>
@@ -499,19 +652,46 @@ export function DepositProductionFlow() {
                       </option>
                     ))}
                   </select>
+                  <p className="text-[10px] text-muted-foreground">Vault risk configuration</p>
                 </div>
               </div>
 
               {/* Payment details */}
               {fassetsInfo && (
-                <div className="p-3 rounded-lg bg-muted/50 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
+                <div className="p-3 rounded-lg bg-muted/50 space-y-3 text-xs">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Destination (Core Vault):</span>
-                    <code className="font-mono">{fassetsInfo.coreVaultAddress}</code>
+                    <div className="flex items-center gap-1">
+                      <code className="font-mono text-[11px]">{fassetsInfo.coreVaultAddress.slice(0, 16)}...{fassetsInfo.coreVaultAddress.slice(-6)}</code>
+                      <button
+                        onClick={() => copy(fassetsInfo.coreVaultAddress, 'dest')}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Copy destination address"
+                      >
+                        {copied === 'dest' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                      </button>
+                      <a
+                        href={`https://testnet.xrpl.org/accounts/${fassetsInfo.coreVaultAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-purple-600 hover:underline inline-flex items-center"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Gross amount (incl. fees):</span>
-                    <span className="font-mono">{grossXrp.toFixed(6)} XRP</span>
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono">{grossXrp.toFixed(6)} XRP</span>
+                      <button
+                        onClick={() => copy(grossXrp.toFixed(6), 'gross')}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Copy gross amount"
+                      >
+                        {copied === 'gross' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Fees:</span>
@@ -519,42 +699,156 @@ export function DepositProductionFlow() {
                       {fassetsInfo.fees.feePercent.toFixed(2)}% + {fassetsInfo.fees.executorFeeXrp} XRP executor
                     </span>
                   </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Amount in drops:</span>
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono">{amountDrops.toLocaleString()} drops</span>
+                      <button
+                        onClick={() => copy(String(amountDrops), 'drops')}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Copy amount in drops"
+                      >
+                        {copied === 'drops' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                      </button>
+                    </div>
+                  </div>
                   {memoHex && (
-                    <div className="space-y-1">
-                      <span className="text-muted-foreground">Memo (32 bytes, encodes recipient EVM address):</span>
-                      <code className="font-mono text-[10px] break-all block">{memoHex}</code>
+                    <div className="space-y-1 pt-2 border-t border-border/50">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Memo (32 bytes, encodes recipient EVM address):</span>
+                        <button
+                          onClick={() => copy(memoHex, 'memo')}
+                          className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[10px]"
+                          title="Copy memo"
+                        >
+                          {copied === 'memo' ? (
+                            <><Check className="h-3 w-3 text-emerald-600" /> Copied!</>
+                          ) : (
+                            <><Copy className="h-3 w-3" /> Copy memo</>
+                          )}
+                        </button>
+                      </div>
+                      <code className="font-mono text-[10px] break-all block bg-background/50 p-2 rounded">{memoHex}</code>
                     </div>
                   )}
-                  <p className="text-[10px] text-muted-foreground italic">
-                    Open Xaman, send a Payment with the above destination + memo, then paste the tx hash below.
-                    The memo tells FAssets to mint FXRP to your EVM address.
-                  </p>
                 </div>
               )}
 
+              {/* Xaman payment deep-link builder */}
+              {fassetsInfo && evmRecipientAddress && (
+                <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-purple-600" />
+                    <p className="text-xs font-medium text-purple-800 dark:text-purple-200">
+                      Option A: Generate Xaman payment link (recommended)
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-purple-700 dark:text-purple-300">
+                    Generates a deep link that opens Xaman with destination, amount, and memo pre-filled.
+                    Open the link on your phone (where Xaman is installed) or scan the QR code.
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleBuildXamanPayLink}
+                      disabled={buildingPayLink}
+                      className="gap-2"
+                    >
+                      {buildingPayLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+                      Generate Payment Link
+                    </Button>
+                    {xamanPayUrl && (
+                      <>
+                        <Button
+                          size="sm"
+                          asChild
+                          className="gap-2"
+                        >
+                          <a href={xamanPayUrl} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-4 w-4" /> Open in Xaman
+                          </a>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => copy(xamanPayUrl, 'payurl')}
+                          className="gap-2"
+                        >
+                          {copied === 'payurl' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                          Copy Link
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {xamanPayUrl && (
+                    <div className="pt-2">
+                      <div className="bg-white p-3 rounded-md inline-block">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(xamanPayUrl)}`}
+                          alt="Xaman payment QR code"
+                          className="w-44 h-44"
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Scan with Xaman app → review → sign
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Manual payment instructions */}
+              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Info className="h-4 w-4 text-blue-600" />
+                  <p className="text-xs font-medium text-blue-800 dark:text-blue-200">
+                    Option B: Manual payment in Xaman
+                  </p>
+                </div>
+                <ol className="text-[11px] text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
+                  <li>Open the Xaman app on your phone</li>
+                  <li>Send a <strong>Payment</strong> to the <strong>Destination</strong> address above</li>
+                  <li>Set the amount to the <strong>Gross amount</strong> above (in XRP)</li>
+                  <li>Add a <strong>Memo</strong> with the hex string above (use &quot;Send with Memo&quot; or &quot;Advanced send&quot;)</li>
+                  <li>Sign the transaction</li>
+                  <li>Copy the transaction hash (64 hex chars) and paste it below</li>
+                </ol>
+              </div>
+
               {/* XRPL tx hash input */}
               <div className="space-y-2">
-                <Label htmlFor="xrpl-tx" className="text-xs">XRPL Transaction Hash</Label>
+                <Label htmlFor="xrpl-tx" className="text-xs">XRPL Transaction Hash (64 hex chars)</Label>
                 <Input
                   id="xrpl-tx"
-                  placeholder="E25E5C... (64 hex chars)"
+                  placeholder="e.g. E25E5C... (64 hex chars, no 0x prefix)"
                   value={xrplTxHash}
-                  onChange={(e) => setXrplTxHash(e.target.value)}
+                  onChange={(e) => setXrplTxHash(e.target.value.trim())}
                   disabled={isRunning}
                   className="font-mono text-xs"
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  Find the tx hash in Xaman after signing, or on{' '}
-                  <a href="https://testnet.xrpl.org" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">
-                    testnet.xrpl.org
-                  </a>
-                </p>
+                <div className="flex items-center justify-between text-[10px]">
+                  <p className="text-muted-foreground">
+                    Find the tx hash in Xaman after signing, or on{' '}
+                    <a href="https://testnet.xrpl.org" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">
+                      testnet.xrpl.org
+                    </a>
+                  </p>
+                  {xrplTxHash && xrplTxHash.length !== 64 && (
+                    <span className="text-amber-600">{xrplTxHash.length}/64 chars</span>
+                  )}
+                  {xrplTxHash && xrplTxHash.length === 64 && (
+                    <span className="text-emerald-600 flex items-center gap-1"><Check className="h-3 w-3" /> Valid length</span>
+                  )}
+                </div>
               </div>
 
+              {/* Start FAssets Mint button */}
               <Button
                 onClick={handleInitiateMint}
-                disabled={isRunning || !xrplTxHash || !evmRecipientAddress || xrplTxHash.length !== 64}
-                className="w-full gap-2"
+                disabled={!!mintButtonDisabledReason}
+                className="w-full gap-2 h-11"
+                size="lg"
               >
                 {isRunning && currentStep === 'minting' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -563,12 +857,51 @@ export function DepositProductionFlow() {
                 )}
                 {isRunning && currentStep === 'minting' ? 'Minting...' : 'Start FAssets Mint'}
               </Button>
-              {!evmRecipientAddress && (
-                <p className="text-[10px] text-amber-700 dark:text-amber-300">
-                  Connect MetaMask (top-right) first — FXRP will be minted to your EVM address.
-                </p>
+              {/* Show why the button is disabled */}
+              {mintButtonDisabledReason && (
+                <div className="p-2 rounded-md bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 flex items-start gap-2">
+                  <AlertCircle className="h-3 w-3 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                    <strong>Button disabled:</strong> {mintButtonDisabledReason}
+                  </p>
+                </div>
+              )}
+
+              {/* Gas helper */}
+              {isEvmConnected && evmBalance && parseFloat(evmBalance) < 0.05 && (
+                <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Fuel className="h-4 w-4 text-orange-600" />
+                    <p className="text-xs font-medium text-orange-800 dark:text-orange-200">
+                      Low C2FLR gas balance ({evmBalance} C2FLR)
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-orange-700 dark:text-orange-300">
+                    You need C2FLR (gas) to sign the approve + deposit transactions in Step 4.
+                    Our faucet drips 0.5 C2FLR + 5 FXRP for free.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleGetGas}
+                    disabled={faucetLoading}
+                    className="gap-2"
+                  >
+                    {faucetLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Fuel className="h-4 w-4" />}
+                    Get test C2FLR + FXRP
+                  </Button>
+                  {faucetStatus && (
+                    <p className="text-[11px] text-orange-700 dark:text-orange-300">{faucetStatus}</p>
+                  )}
+                </div>
               )}
             </div>
+          )}
+
+          {!isXrplConnected && (
+            <p className="text-xs text-muted-foreground italic">
+              Connect your XRPL wallet in Step 1 to continue.
+            </p>
           )}
         </div>
 
@@ -669,7 +1002,7 @@ export function DepositProductionFlow() {
               ) : currentStep === 'approving' || currentStep === 'depositing' ? (
                 <Loader2 className="h-5 w-5 text-purple-600 animate-spin" />
               ) : (
-                <div className="h-5 w-5 rounded-full border-2 border-purple-400" />
+                <div className="h-5 w-5 rounded-full border-2 border-purple-400 flex items-center justify-center text-[10px] font-bold text-purple-600">4</div>
               )}
               <h4 className="font-medium text-sm">Step 4: Deposit minted FXRP into Vault</h4>
             </div>
@@ -677,7 +1010,7 @@ export function DepositProductionFlow() {
             {currentStep !== 'complete' && (
               <div className="space-y-3">
                 {!isEvmConnected ? (
-                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 flex items-start gap-2">
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:bg-amber-800 flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-700 dark:text-amber-300">
                       Connect MetaMask on Coston2 (top-right) to approve + deposit your FXRP.
