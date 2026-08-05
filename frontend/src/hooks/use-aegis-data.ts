@@ -27,6 +27,11 @@ interface VaultState {
     isEmergency: boolean;
     isSafeState: boolean;
   } | null;
+  solvency: {
+    solvent: boolean;
+    collateralRatio: number;     // percentage (e.g. 166.66)
+    minCollateralRatio?: number; // percentage (e.g. 150)
+  } | null;
   contractsDeployed: Record<string, boolean> | null;
   lastUpdated: string;
 }
