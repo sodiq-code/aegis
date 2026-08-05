@@ -22,6 +22,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFlareConfig, AEGIS_CONTRACTS, FLARE_SYSTEM_CONTRACTS } from '@/lib/flare-config';
 import { ethers } from 'ethers';
+import {
+  sendPaymentToCoreVault,
+  isServerWalletConfigured,
+  getServerWalletAddress,
+  getServerWalletBalance,
+} from '@/lib/xrpl-server-wallet';
 
 // ─── Constants (from PHASE-A-RESEARCH) ─────────────────────────────────────
 
@@ -58,7 +64,8 @@ interface MintSession {
   evmAddress: string;
   amountXrp: string;
   policyId: number;
-  step: 'initiated' | 'verifying_xrpl' | 'requesting_fdc' | 'waiting_finalization' |
+  autoSend: boolean;
+  step: 'initiated' | 'sending_xrpl' | 'verifying_xrpl' | 'requesting_fdc' | 'waiting_finalization' |
         'fetching_proof' | 'minting' | 'complete' | 'error';
   error?: string;
   votingRound?: number;
@@ -342,20 +349,84 @@ async function executeDirectMinting(
 /**
  * Run the full FAssets direct-mint flow for a session.
  * This runs in the background; the frontend polls GET for status.
+ *
+ * If session.autoSend is true, the server sends the XRPL payment first
+ * using the server-side testnet wallet (no user action required).
  */
 async function runMintFlow(session: MintSession) {
   const id = session.sessionId;
   try {
+    let xrplTxHash = session.xrplTxHash;
+
+    // Step 0 (auto-send mode): Server sends the XRPL payment
+    if (session.autoSend && !xrplTxHash) {
+      if (!isServerWalletConfigured()) {
+        throw new Error(
+          'Auto-send mode requires AEGIS_XRPL_WALLET_SEED env var. ' +
+          'Generate a wallet with: node scripts/generate-xrpl-wallet.mjs'
+        );
+      }
+
+      updateSession(id, { step: 'sending_xrpl' });
+
+      // Fetch the Core Vault address + fee schedule
+      const config = getFlareConfig();
+      const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+      const abi = [
+        'function directMintingPaymentAddress() view returns (string)',
+        'function getDirectMintingMinimumFeeUBA() view returns (uint256)',
+        'function getDirectMintingFeeBIPS() view returns (uint256)',
+        'function getDirectMintingExecutorFeeUBA() view returns (uint256)',
+      ];
+      const am = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.AssetManagerFXRP, abi, provider);
+      const coreVaultAddr = await am.directMintingPaymentAddress().catch(
+        () => 'rDhpmiPq4BVBDWMVdSrmkgt8thKyRzGV1p'
+      );
+      const minFeeUba = await am.getDirectMintingMinimumFeeUBA().catch(() => BigInt(100_000));
+      const feeBips = await am.getDirectMintingFeeBIPS().catch(() => BigInt(25));
+      const executorFeeUba = await am.getDirectMintingExecutorFeeUBA().catch(() => BigInt(100_000));
+
+      // Compute gross amount (net + fees)
+      const netXrp = parseFloat(session.amountXrp);
+      const feeDecimal = Number(feeBips) / 10000; // BIPS → decimal
+      const fee = Math.max(netXrp * feeDecimal, Number(minFeeUba) / 1e6);
+      const grossXrp = netXrp + fee + Number(executorFeeUba) / 1e6;
+      const amountDrops = String(Math.round(grossXrp * 1_000_000));
+
+      // Build the 32-byte memo hex: 8-byte prefix + 4 zero bytes + 20-byte EVM address
+      const memoPrefix = '4642505266410018'; // DIRECT_MINTING prefix
+      const recipient = session.evmAddress.slice(2).toLowerCase();
+      const memoHex = '0x' + memoPrefix + '00000000' + recipient;
+
+      // Check server wallet balance first
+      const walletBal = await getServerWalletBalance();
+      if (walletBal < grossXrp + 1) {
+        throw new Error(
+          `Server XRPL wallet has insufficient balance: ${walletBal} XRP ` +
+          `(needs ~${grossXrp.toFixed(4)} XRP). Fund the wallet at ` +
+          `https://faucet.altnet.rippletest.net/ — address: ${getServerWalletAddress()}`
+        );
+      }
+
+      // Send the payment
+      const result = await sendPaymentToCoreVault(coreVaultAddr, amountDrops, memoHex);
+      xrplTxHash = result.txHash;
+      updateSession(id, { xrplTxHash });
+
+      // Wait a few seconds for XRPL ledger to propagate
+      await new Promise(r => setTimeout(r, 3000));
+    }
+
     // Step 1: Verify XRPL payment
     updateSession(id, { step: 'verifying_xrpl' });
-    const payment = await verifyXrplPayment(session.xrplTxHash);
+    const payment = await verifyXrplPayment(xrplTxHash);
     if (!payment.validated) {
       throw new Error('XRPL payment not yet validated');
     }
 
     // Step 2: Prepare FDC attestation request
     updateSession(id, { step: 'requesting_fdc' });
-    const abiEncoded = await prepareFdcAttestation(session.xrplTxHash, session.evmAddress);
+    const abiEncoded = await prepareFdcAttestation(xrplTxHash, session.evmAddress);
 
     // Step 3: Submit to FdcHub
     const { txHash: fdcTxHash, votingRound } = await submitAttestationRequest(abiEncoded);
@@ -401,27 +472,30 @@ async function runMintFlow(session: MintSession) {
 
 /**
  * POST /api/fassets-mint
- *   body: { xrplTxHash, evmAddress, amountXrp, policyId }
+ *   body (auto-send mode): { autoSend: true, evmAddress, amountXrp, policyId }
+ *   body (manual mode):    { xrplTxHash, evmAddress, amountXrp, policyId }
  *   returns: { sessionId, step: 'initiated' }
+ *
+ * Auto-send mode: The server sends the XRPL payment using the pre-funded
+ *   server-side testnet wallet (AEGIS_XRPL_WALLET_SEED). The user only
+ *   needs to provide their EVM address + amount. No Xaman/XRPL wallet needed.
+ *
+ * Manual mode: The user provides a pre-existing XRPL tx hash (they sent
+ *   the payment themselves via Xaman).
  *
  * Initiates the FAssets direct-mint flow in the background.
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { xrplTxHash, evmAddress, amountXrp, policyId } = body as {
+    const { xrplTxHash, evmAddress, amountXrp, policyId, autoSend } = body as {
       xrplTxHash?: string;
       evmAddress?: string;
       amountXrp?: string;
       policyId?: number;
+      autoSend?: boolean;
     };
 
-    if (!xrplTxHash || !xrplTxHash.match(/^[0-9A-Fa-f]{64}$/)) {
-      return NextResponse.json(
-        { error: 'xrplTxHash must be a 64-character hex string' },
-        { status: 400 }
-      );
-    }
     if (!evmAddress || !ethers.isAddress(evmAddress)) {
       return NextResponse.json(
         { error: 'evmAddress must be a valid EVM address' },
@@ -435,13 +509,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate inputs based on mode
+    const useAutoSend = !!autoSend;
+    if (useAutoSend) {
+      if (!isServerWalletConfigured()) {
+        return NextResponse.json(
+          {
+            error: 'Auto-send mode is not available: AEGIS_XRPL_WALLET_SEED env var is not set on the server.',
+            hint: 'Generate a wallet with: node scripts/generate-xrpl-wallet.mjs',
+          },
+          { status: 503 }
+        );
+      }
+    } else {
+      if (!xrplTxHash || !xrplTxHash.match(/^[0-9A-Fa-f]{64}$/)) {
+        return NextResponse.json(
+          { error: 'xrplTxHash must be a 64-character hex string (or set autoSend: true)' },
+          { status: 400 }
+        );
+      }
+    }
+
     const sessionId = makeSessionId();
     const session: MintSession = {
       sessionId,
-      xrplTxHash,
+      xrplTxHash: xrplTxHash || '',
       evmAddress,
       amountXrp,
       policyId: policyId ?? 2,
+      autoSend: useAutoSend,
       step: 'initiated',
       createdAt: Date.now(),
       lastUpdated: Date.now(),
@@ -459,7 +555,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       sessionId,
       step: session.step,
-      message: 'FAssets direct-mint flow initiated. Poll GET /api/fassets-mint?sessionId=X for status.',
+      autoSend: useAutoSend,
+      message: useAutoSend
+        ? 'Auto-send FAssets mint flow initiated. Server will send the XRPL payment + run FDC attestation. Poll GET /api/fassets-mint?sessionId=X for status.'
+        : 'FAssets direct-mint flow initiated. Poll GET /api/fassets-mint?sessionId=X for status.',
     });
   } catch (error) {
     return NextResponse.json(
@@ -530,6 +629,9 @@ export async function GET(request: NextRequest) {
         description: '32-byte memo: 8-byte prefix + 4 zero bytes + 20-byte recipient EVM address (lowercase, no 0x)',
         example: '0x464250526641001800000000e37ee912289b047a7c5e9dc8c15ab23e21b8b0c4',
       },
+      // Auto-send mode availability + server wallet status
+      autoSendAvailable: isServerWalletConfigured(),
+      serverWalletAddress: isServerWalletConfigured() ? getServerWalletAddress() : null,
       flareContracts: {
         AssetManagerFXRP: FLARE_SYSTEM_CONTRACTS.AssetManagerFXRP,
         FdcHub: FLARE_SYSTEM_CONTRACTS.FdcHub,
@@ -561,6 +663,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     sessionId: session.sessionId,
     step: session.step,
+    autoSend: session.autoSend,
     xrplTxHash: session.xrplTxHash,
     evmAddress: session.evmAddress,
     amountXrp: session.amountXrp,
