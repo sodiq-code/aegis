@@ -19,6 +19,7 @@ import (
         "crypto/ecdsa"
         "fmt"
         "math/big"
+        "reflect"
         "strings"
         "sync"
         "time"
@@ -55,6 +56,7 @@ const SolvencyRootABI = `[
                         {
                                 "components": [
                                         {"name": "merkleRoot", "type": "bytes32"},
+                                        {"name": "surplusBps", "type": "uint256"},
                                         {"name": "totalFxrpCollateral", "type": "uint256"},
                                         {"name": "totalLiabilities", "type": "uint256"},
                                         {"name": "collateralRatio", "type": "uint256"},
@@ -84,6 +86,7 @@ const SolvencyRootABI = `[
                 "anonymous": false,
                 "inputs": [
                         {"indexed": true, "name": "merkleRoot", "type": "bytes32"},
+                        {"indexed": false, "name": "surplusBps", "type": "uint256"},
                         {"indexed": false, "name": "totalFxrpCollateral", "type": "uint256"},
                         {"indexed": false, "name": "collateralRatio", "type": "uint256"},
                         {"indexed": false, "name": "votingRound", "type": "uint256"},
@@ -404,9 +407,63 @@ func (ocp *OnChainPublisher) ReadIsSolvent() (bool, *big.Int, error) {
         return false, nil, fmt.Errorf("unexpected result format")
 }
 
-// FlareSystemsManagerAddress is the canonical Coston2 address.
-// (See https://dev.flare.network/developer-guides/system-contracts/)
-const FlareSystemsManagerAddress = "0x315a594c1fB1c476dCC8Bdd23Bf9F75183286D09"
+// GetCurrentRoot reads the merkleRoot of the current solvency proof from the
+// SolvencyRoot contract. Returns "" when no proof has been published yet
+// (i.e. the stored root is the zero bytes32). The publish path uses this to
+// avoid republishing a root that is already on-chain, which the contract
+// rejects with "SolvencyRoot: proof already exists".
+func (ocp *OnChainPublisher) GetCurrentRoot() (string, error) {
+        if !ocp.connected {
+                return "", fmt.Errorf("not connected to RPC")
+        }
+
+        solvencyRootAddr := common.HexToAddress(ocp.config.SolvencyRootAddress)
+        contract := bind.NewBoundContract(solvencyRootAddr, ocp.abi, ocp.client, ocp.client, ocp.client)
+
+        var results []interface{}
+        if err := contract.Call(&bind.CallOpts{}, &results, "getCurrentSolvencyProof"); err != nil {
+                logger.Warnf("GetCurrentRoot: contract.Call failed: %v", err)
+                return "", fmt.Errorf("failed to read current proof: %w", err)
+        }
+        if len(results) == 0 {
+                return "", nil
+        }
+
+        // results[0] is an anonymous struct whose first field is the bytes32
+        // merkleRoot (the ABI lists it as the first component).
+        v := reflect.ValueOf(results[0])
+        if v.Kind() != reflect.Struct || v.NumField() == 0 {
+                logger.Warnf("GetCurrentRoot: unexpected result kind=%v fields=%d", v.Kind(), v.NumField())
+                return "", nil
+        }
+        rootField := v.Field(0)
+        // bytes32 may be returned as [32]byte or common.Hash depending on the
+        // go-ethereum version — handle both.
+        var b [32]byte
+        switch rv := rootField.Interface().(type) {
+        case [32]byte:
+                b = rv
+        case common.Hash:
+                b = rv
+        default:
+                logger.Warnf("GetCurrentRoot: unexpected merkleRoot type %T", rootField.Interface())
+                return "", nil
+        }
+        var zero [32]byte
+        if b == zero {
+                return "", nil
+        }
+        root := common.BytesToHash(b[:]).Hex()
+        logger.Infof("GetCurrentRoot: on-chain root = %s", root)
+        return root, nil
+}
+
+// FlareSystemsManagerAddress is the canonical Coston2 address of the
+// FlareSystemsManager contract (sourced from config/coston2/deployed-addresses.json).
+// This is where getCurrentVotingEpochId() is read to stamp each published
+// solvency proof with the canonical Flare voting round auditors use for FDC
+// cross-checks.
+const FlareSystemsManagerAddress = "0xA90Db6D10F856799b10ef2A77EBCbF460aC71e52"
 
 // FlareSystemsManagerABI is the minimal ABI for getCurrentVotingEpochId().
 const FlareSystemsManagerABI = `[

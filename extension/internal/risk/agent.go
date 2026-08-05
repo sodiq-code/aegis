@@ -94,9 +94,10 @@ type AgentObservation struct {
         ETHUSDPrice  float64 `json:"ethUsdPrice"`
 
         // Vault state
-        TotalFxrpDeposited  uint64 `json:"totalFxrpDeposited"`
-        ActivePositionCount int    `json:"activePositionCount"`
-        MerkleRoot          string `json:"merkleRoot"`
+        TotalFxrpDeposited   uint64 `json:"totalFxrpDeposited"`
+        TotalFxrpLiabilities uint64 `json:"totalFxrpLiabilities"`
+        ActivePositionCount  int    `json:"activePositionCount"`
+        MerkleRoot           string `json:"merkleRoot"`
 
         // FDC-attested external state
         XRPLBalance     float64 `json:"xrplBalance"`
@@ -212,10 +213,11 @@ type PositionProvider interface {
 
 // VaultStateSnapshot is a simplified snapshot of the vault state.
 type VaultStateSnapshot struct {
-        TotalFxrpDeposited uint64 `json:"totalFxrpDeposited"`
-        MerkleRoot         string `json:"merkleRoot"`
-        CollateralRatioBps uint64 `json:"collateralRatioBps"`
-        IsSolvent          bool   `json:"isSolvent"`
+        TotalFxrpDeposited   uint64 `json:"totalFxrpDeposited"`
+        TotalFxrpLiabilities uint64 `json:"totalFxrpLiabilities"`
+        MerkleRoot           string `json:"merkleRoot"`
+        CollateralRatioBps   uint64 `json:"collateralRatioBps"`
+        IsSolvent            bool   `json:"isSolvent"`
 }
 
 // FTSOProvider provides FTSO price feeds for the agent to observe.
@@ -661,6 +663,7 @@ func (ra *RiskAgent) observe() (*AgentObservation, error) {
         if ra.positionProvider != nil {
                 vaultState := ra.positionProvider.GetVaultState()
                 obs.TotalFxrpDeposited = vaultState.TotalFxrpDeposited
+                obs.TotalFxrpLiabilities = vaultState.TotalFxrpLiabilities
                 obs.MerkleRoot = vaultState.MerkleRoot
                 obs.ActivePositionCount = ra.positionProvider.GetActivePositionCount()
         }
@@ -668,8 +671,8 @@ func (ra *RiskAgent) observe() (*AgentObservation, error) {
         // Compute features from observed data
         obs.Features = ra.computeFeatures(obs)
 
-        logger.Infof("Observation: XRP=$%.4f, FLR=$%.6f, vault=%d FXRP, positions=%d, round=%d",
-                obs.XRPUSDPrice, obs.FLRUSDPrice, obs.TotalFxrpDeposited, obs.ActivePositionCount, obs.VotingRound)
+        logger.Infof("Observation: XRP=$%.4f, FLR=$%.6f, vault=%d FXRP, liabilities=%d FXRP, positions=%d, round=%d",
+                obs.XRPUSDPrice, obs.FLRUSDPrice, obs.TotalFxrpDeposited, obs.TotalFxrpLiabilities, obs.ActivePositionCount, obs.VotingRound)
 
         return obs, nil
 }
@@ -853,14 +856,16 @@ func (ra *RiskAgent) attest(obs *AgentObservation) (*AttestResult, error) {
                 }, nil
         }
 
-        // Compute the solvency data from the observation
+        // Compute the solvency data from the observation. Liabilities come
+        // from the real PositionComputer (deposits minus withdrawals/loans);
+        // when there are no liabilities the vault is fully solvent.
         totalCollateral := obs.TotalFxrpDeposited
-        totalLiabilities := uint64(float64(totalCollateral) * 0.7) // 70% utilization (simplified)
+        totalLiabilities := obs.TotalFxrpLiabilities
         collateralRatio := uint64(0)
         if totalLiabilities > 0 {
                 collateralRatio = totalCollateral * 10000 / totalLiabilities
         } else {
-                collateralRatio = 999999 // fully solvent
+                collateralRatio = 999999 // fully solvent (no liabilities)
         }
 
         // Publish the solvency proof on-chain

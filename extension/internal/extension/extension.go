@@ -7,6 +7,7 @@ import (
         "math/big"
         "net/http"
         "os"
+        "strings"
         "sync"
         "time"
 
@@ -304,8 +305,24 @@ func New(extensionPort, signPort int) *Extension {
                 e.RiskAgent = risk.NewRiskAgent(agentConfig, scorer)
 
                 // Set up providers for Coston2 testing
-                ftsoProvider := risk.NewMockFTSOProvider()
-                e.RiskAgent.SetFTSOProvider(ftsoProvider)
+                // PositionProvider: wire the real PositionComputer so the agent
+                // observes the real Merkle root / collateral / liabilities built
+                // from on-chain DepositMade events. Without this the agent would
+                // publish a zero root and revert with "SolvencyRoot: zero merkle root".
+                e.RiskAgent.SetPositionProvider(&positionProviderAdapter{pc: e.PositionComputer})
+
+                // FTSOProvider: read the REAL voting round from
+                // FlareSystemsManager.getCurrentVotingEpochId so the published
+                // proof carries the canonical round auditors use for FDC checks.
+                // The mock provider returned round=1 which is not a real round.
+                ftsoRPC := getenv("AEGIS_RPC_URL", "https://coston2-api.flare.network/ext/C/rpc")
+                if ftso, err := newCoston2FTSOProvider(ftsoRPC); err == nil {
+                        e.RiskAgent.SetFTSOProvider(ftso)
+                        fmt.Printf("RiskAgent FTSO provider → Coston2 (real voting round)\n")
+                } else {
+                        fmt.Printf("Warning: real FTSO provider unavailable, using mock: %v\n", err)
+                        e.RiskAgent.SetFTSOProvider(risk.NewMockFTSOProvider())
+                }
 
                 // Wire the PolicyEngine into the RiskAgent via the adapter
                 // This ensures the RiskAgent's decisions are validated against policy constraints
@@ -620,14 +637,58 @@ func (e *Extension) getAgentState() risk.AgentState {
         return e.RiskAgent.GetState()
 }
 
+// ─── PositionProvider Adapter ──────────────────────────────────────────────
+
+// positionProviderAdapter adapts the PositionComputer to implement the
+// RiskAgent's PositionProvider interface. This is the critical wiring that
+// lets the RiskAgent observe the real on-chain-derived vault state
+// (TotalFxrpDeposited, TotalFxrpLiabilities, MerkleRoot, position counts)
+// so the published solvency proof carries a non-zero root built from real
+// deposits instead of an empty (zero) root that the contract rejects.
+type positionProviderAdapter struct {
+        pc *position.PositionComputer
+}
+
+func (a *positionProviderAdapter) GetVaultState() risk.VaultStateSnapshot {
+        vs := a.pc.GetVaultState()
+        if vs == nil {
+                return risk.VaultStateSnapshot{}
+        }
+        return risk.VaultStateSnapshot{
+                TotalFxrpDeposited:   vs.TotalFxrpDeposited,
+                TotalFxrpLiabilities: vs.TotalFxrpLiabilities,
+                MerkleRoot:           vs.MerkleRoot,
+                CollateralRatioBps:   vs.CollateralRatioBps,
+                IsSolvent:            vs.IsSolvent,
+        }
+}
+
+func (a *positionProviderAdapter) GetPositionCount() int {
+        return a.pc.GetPositionCount()
+}
+
+func (a *positionProviderAdapter) GetActivePositionCount() int {
+        return a.pc.GetActivePositionCount()
+}
+
 // ─── OnChainPublisher Adapter ───────────────────────────────────────────────
 
 // onchainPublisherAdapter adapts the OnChainPublisher to implement the
 // RiskAgent's AttestationPublisher interface. This lets the RiskAgent
 // publish solvency proofs on-chain via the real SolvencyRoot contract
 // instead of the MockAttestationPublisher.
+//
+// It also deduplicates publishes: the SolvencyRoot contract rejects
+// republishing an already-stored root with "SolvencyRoot: proof already
+// exists". Since the Merkle root is deterministic for a given position set,
+// the daemon would revert every 90s after the first publish. The adapter
+// tracks the last published root (seeded from the on-chain current root at
+// first use) and skips the on-chain tx when the root is unchanged.
 type onchainPublisherAdapter struct {
         publisher *onchain.OnChainPublisher
+        mu        sync.Mutex
+        lastRoot  string
+        inited    bool
 }
 
 func (a *onchainPublisherAdapter) PublishSolvencyProof(
@@ -640,6 +701,26 @@ func (a *onchainPublisherAdapter) PublishSolvencyProof(
         if a.publisher == nil || !a.publisher.IsConnected() {
                 return "", fmt.Errorf("OnChainPublisher not connected")
         }
+
+        a.mu.Lock()
+        defer a.mu.Unlock()
+
+        // Lazy-init: seed lastRoot from the current on-chain root so that
+        // after a daemon restart we don't try to republish the root that is
+        // already stored on-chain.
+        if !a.inited {
+                if cur, err := a.publisher.GetCurrentRoot(); err == nil {
+                        a.lastRoot = cur
+                }
+                a.inited = true
+        }
+
+        // Skip republishing an unchanged root — the contract rejects duplicates.
+        if merkleRoot != "" && merkleRoot == a.lastRoot {
+                fmt.Printf("[TEE] Solvency root unchanged (%s…) — skipping publish (already on-chain)\n", truncHex(merkleRoot, 18))
+                return "", nil
+        }
+
         proof, err := a.publisher.PublishSolvencyProof(
                 merkleRoot,
                 totalCollateral,
@@ -648,13 +729,33 @@ func (a *onchainPublisherAdapter) PublishSolvencyProof(
                 votingRound,
         )
         if err != nil {
+                // A revert may simply mean the root was already published by
+                // another attester (e.g. the dashboard /api/solvency route).
+                // Re-read the on-chain root; if it matches, treat as success.
+                if strings.Contains(err.Error(), "reverted") {
+                        if cur, rerr := a.publisher.GetCurrentRoot(); rerr == nil && cur == merkleRoot {
+                                a.lastRoot = merkleRoot
+                                fmt.Printf("[TEE] Root %s… already on-chain (revert treated as success)\n", truncHex(merkleRoot, 18))
+                                return "", nil
+                        }
+                }
                 return "", err
         }
+
+        a.lastRoot = merkleRoot
         return proof.TxHash.Hex(), nil
 }
 
 func (a *onchainPublisherAdapter) IsConnected() bool {
         return a.publisher != nil && a.publisher.IsConnected()
+}
+
+// truncHex returns the first n chars of a hex string for compact logging.
+func truncHex(s string, n int) string {
+        if len(s) <= n {
+                return s
+        }
+        return s[:n]
 }
 
 // ─── Event Listener Loop ────────────────────────────────────────────────────
@@ -687,18 +788,33 @@ func (e *Extension) startEventListenerLoop() {
         for {
                 select {
                 case <-ticker.C:
-                        // On first tick, set lastProcessedBlock to ~1000 blocks ago
-                        // so we catch any very recent deposits without backfilling.
+                        // On first tick, determine the starting block for the
+                        // initial backfill. AEGIS_VAULT_SCAN_FROM_BLOCK overrides
+                        // the default (head - 10000) so known historical deposits
+                        // can be picked up — this matters because the TEE must
+                        // rebuild the Merkle tree from ALL real deposits, not just
+                        // ones that arrive after it starts. FetchDepositEvents
+                        // chunks the range internally (Coston2 caps eth_getLogs
+                        // at ~30 blocks/request), so a wide one-time backfill is
+                        // safe, just slower on the first tick.
                         if lastProcessedBlock == 0 {
                                 head, err := e.EventListener.GetHeadBlock()
                                 if err != nil {
                                         logger.Warnf("EventListener: failed to get head block: %v", err)
                                         continue
                                 }
-                                if head > 1000 {
-                                        lastProcessedBlock = head - 1000
-                                } else {
-                                        lastProcessedBlock = 1
+                                if fromStr := os.Getenv("AEGIS_VAULT_SCAN_FROM_BLOCK"); fromStr != "" {
+                                        var from uint64
+                                        if _, err := fmt.Sscanf(fromStr, "%d", &from); err == nil && from > 0 && from <= head {
+                                                lastProcessedBlock = from
+                                        }
+                                }
+                                if lastProcessedBlock == 0 {
+                                        if head > 10000 {
+                                                lastProcessedBlock = head - 10000
+                                        } else {
+                                                lastProcessedBlock = 1
+                                        }
                                 }
                                 logger.Infof("EventListener: initial scan from block %d (head=%d)", lastProcessedBlock, head)
                         }
@@ -763,14 +879,19 @@ func (e *Extension) publishFreshSolvencyProof() {
                 return
         }
 
-        // Get the current vault state for collateral data
+        // Get the current vault state for collateral data. Both collateral and
+        // liabilities come from the real PositionComputer (built from on-chain
+        // DepositMade / WithdrawalCompleted events) — NOT a hardcoded 500M demo
+        // value, which caused an arithmetic underflow in the contract's
+        // surplusBps computation and reverted every publish.
         vaultState := e.PositionComputer.GetVaultState()
         totalCollateral := vaultState.TotalFxrpDeposited
-        // For the demo, liabilities are fixed at 500M FXRP (matches the WARNING state)
-        totalLiabilities := uint64(500_000_000)
+        totalLiabilities := vaultState.TotalFxrpLiabilities
         var collateralRatio uint64
         if totalLiabilities > 0 {
                 collateralRatio = (totalCollateral * 10000) / totalLiabilities
+        } else {
+                collateralRatio = 999999 // fully solvent (no liabilities)
         }
 
         // Read the real current voting round from FlareSystemsManager.
@@ -795,7 +916,16 @@ func (e *Extension) publishFreshSolvencyProof() {
                 }
         }
 
-        // Publish on-chain via the verifier-key-signed transaction
+        // Publish on-chain via the verifier-key-signed transaction. Skip if the
+        // root is already the current on-chain proof (the contract rejects
+        // duplicate roots with "SolvencyRoot: proof already exists" — the
+        // RiskAgent's 90s loop may have already published this same root).
+        if cur, err := e.OnChainPublisher.GetCurrentRoot(); err == nil && cur == merkleRoot {
+                logger.Infof("publishFreshSolvencyProof: root %s… already on-chain — skipping",
+                        truncHex(merkleRoot, 18))
+                return
+        }
+
         proof, err := e.OnChainPublisher.PublishSolvencyProof(
                 merkleRoot,
                 totalCollateral,
