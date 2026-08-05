@@ -428,17 +428,44 @@ async function runPhase1(evmAddress: string, amountXrp: string): Promise<{
   const sendResult = await sendPaymentToCoreVault(coreVaultAddr, amountDrops, memoHex);
   const xrplTxHash = sendResult.txHash;
 
-  // Wait a few seconds for XRPL ledger to propagate
-  await new Promise(r => setTimeout(r, 3000));
+  // Wait for XRPL ledger to propagate + be visible to the FDC verifier.
+  // The FDC verifier queries the XRPL testnet, so we need to give it time.
+  await new Promise(r => setTimeout(r, 8000));
 
-  // Verify XRPL payment
-  const payment = await verifyXrplPayment(xrplTxHash);
-  if (!payment.validated) {
-    throw new Error('XRPL payment not yet validated — try again in a few seconds');
+  // Verify XRPL payment (with retries — XRPL RPC may lag behind the
+  // submitAndWait confirmation by a few seconds)
+  let payment: { validated: boolean };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      payment = await verifyXrplPayment(xrplTxHash);
+      if (payment.validated) break;
+    } catch {}
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  if (!payment! || !payment.validated) {
+    throw new Error('XRPL payment not yet validated after retries — try again in a few seconds');
   }
 
-  // Prepare FDC attestation request
-  const abiEncoded = await prepareFdcAttestation(xrplTxHash, evmAddress);
+  // Prepare FDC attestation request (with retries — the FDC verifier may
+  // not see the XRPL transaction immediately after ledger finalization)
+  let abiEncoded: string;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      abiEncoded = await prepareFdcAttestation(xrplTxHash, evmAddress);
+      break;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('TRANSACTION DOES NOT EXIST') || msg.includes('INVALID')) {
+        // FDC verifier hasn't indexed the XRPL tx yet — wait + retry
+        await new Promise(r => setTimeout(r, 5000));
+        continue;
+      }
+      throw e;
+    }
+  }
+  if (!abiEncoded!) {
+    throw new Error('FDC verifier could not find the XRPL transaction after retries');
+  }
 
   // Submit to FdcHub
   const { txHash: fdcTxHash, votingRound } = await submitAttestationRequest(abiEncoded);
