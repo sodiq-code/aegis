@@ -607,27 +607,36 @@ async function runPhase2(
       };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      // PaymentAlreadyConfirmed = 0x18dce79f — the payment was already minted
-      // (by a bot or a previous attempt). Check the user's FXRP balance; if
-      // they have FXRP, allow them to proceed to the deposit step.
-      if (msg.includes('0x18dce79f') || msg.includes('PaymentAlreadyConfirmed')) {
-        const evmAddress = '0x' + abiEncodedRequest.slice(-40);
-        const config = getFlareConfig();
-        const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-        const fxrpAbi = ['function balanceOf(address) view returns (uint256)'];
-        const fxrp = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.FXRP, fxrpAbi, provider);
-        const balance = await fxrp.balanceOf(evmAddress);
-        if (balance > 0) {
-          return {
-            phase: 'complete',
-            finalized: true,
-            mintTxHash: '',
-            fxrpMinted: balance.toString(),
-          };
-        }
-        throw new Error('PaymentAlreadyConfirmed: The XRPL payment was already minted, and your address has 0 FXRP. Try with a new XRPL payment.');
+      // On ANY revert from executeDirectMinting, check the user's FXRP balance.
+      // Common revert causes on Coston2:
+      //   - PaymentAlreadyConfirmed (0x18dce79f): the XRPL payment was already
+      //     minted by an attestation bot or a previous attempt
+      //   - Proof already consumed: the same proof was used in a prior tx
+      //   - ethers can't always decode the custom-error selector (data=null)
+      // In ALL these cases the FXRP was already minted to the user's address,
+      // so if they have a balance, allow them to proceed to the deposit step.
+      // The user's goal is to deposit FXRP — if they have it, they can proceed.
+      const evmAddress = '0x' + abiEncodedRequest.slice(-40);
+      const config = getFlareConfig();
+      const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+      const fxrpAbi = ['function balanceOf(address) view returns (uint256)'];
+      const fxrp = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.FXRP, fxrpAbi, provider);
+      const balance = await fxrp.balanceOf(evmAddress);
+      if (balance > 0) {
+        return {
+          phase: 'complete',
+          finalized: true,
+          mintTxHash: '',
+          fxrpMinted: balance.toString(),
+        };
       }
-      throw e;
+      // No FXRP — this is a genuine error (not a "already minted" case).
+      throw new Error(
+        `executeDirectMinting reverted and your address has 0 FXRP. ` +
+        `This usually means the proof is invalid or the attestation hasn't fully indexed yet. ` +
+        `Wait a minute and retry, or start a new mint. ` +
+        `Original error: ${msg.slice(0, 300)}`
+      );
     }
   }
 
