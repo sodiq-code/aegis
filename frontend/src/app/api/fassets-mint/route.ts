@@ -458,6 +458,11 @@ async function runPhase1(evmAddress: string, amountXrp: string): Promise<{
  * Phase 2 (synchronous): Checks if the voting round is finalized.
  * If finalized, fetches the proof and calls executeDirectMinting.
  * If not, returns phase='waiting_finalization' so the client polls again.
+ *
+ * Note: Even after the round finalizes, the DA Layer may take a few extra
+ * seconds to index the proof. If fetchAttestationProof returns "not found",
+ * we return 'waiting_finalization' instead of an error so the client keeps
+ * polling.
  */
 async function runPhase2(
   votingRound: number,
@@ -473,8 +478,23 @@ async function runPhase2(
     return { phase: 'waiting_finalization', finalized: false };
   }
 
-  // Fetch proof from DA Layer
-  const { merkleProof, response } = await fetchAttestationProof(votingRound, abiEncodedRequest);
+  // Round is finalized — fetch proof from DA Layer.
+  // The DA Layer may not have indexed the proof immediately after
+  // finalization, so we treat "not found" as "still waiting".
+  let merkleProof: string[];
+  let response: any;
+  try {
+    const proofResult = await fetchAttestationProof(votingRound, abiEncodedRequest);
+    merkleProof = proofResult.merkleProof;
+    response = proofResult.response;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found') || msg.includes('400') || msg.includes('404')) {
+      // DA Layer hasn't indexed the proof yet — keep waiting
+      return { phase: 'waiting_finalization', finalized: true };
+    }
+    throw e;
+  }
 
   // Call executeDirectMinting
   const { txHash: mintTxHash, mintedAmount } = await executeDirectMinting(merkleProof, response);
