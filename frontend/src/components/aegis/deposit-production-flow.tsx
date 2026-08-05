@@ -98,7 +98,7 @@ const MINT_STEP_LABELS: Record<string, { label: string; description: string }> =
   sending_xrpl:           { label: 'Sending XRPL payment',         description: 'Server wallet sending payment to FAssets Core Vault with memo' },
   verifying_xrpl:         { label: 'Verifying XRPL payment',       description: 'Confirming the payment on XRPL testnet' },
   requesting_fdc:         { label: 'Requesting FDC attestation',   description: 'Preparing attestation request via verifier API' },
-  waiting_finalization:   { label: 'Waiting for FDC finalization', description: '~90-180 seconds for voting round to finalize' },
+  waiting_finalization:   { label: 'Waiting for FDC finalization', description: '~2-4 min for next voting round to finalize + proof indexing' },
   fetching_proof:         { label: 'Fetching attestation proof',   description: 'Downloading Merkle proof from DA Layer' },
   minting:                { label: 'Minting FXRP',                 description: 'Calling AssetManagerFXRP.executeDirectMinting' },
   complete:               { label: 'Minted',                       description: 'FXRP minted to your EVM address' },
@@ -177,13 +177,28 @@ export function DepositProductionFlow() {
     return () => { mounted = false; };
   }, []);
 
-  // Poll Phase 2 (finalization) every 15s until complete or error
+  // Poll Phase 2 (finalization) every 10s until complete, error, or 5-min timeout.
+  // The backend now tries rounds N..N+4 each poll, so 10s gives fast feedback
+  // once the FDC proof becomes available in the DA Layer (typically ~90-180s).
   useEffect(() => {
     if (!mintState || mintState.phase !== 'waiting_finalization') return;
     if (!mintState.votingRound || !mintState.abiEncodedRequest) return;
 
     let cancelled = false;
+    const MAX_WAIT_MS = 5 * 60 * 1000; // 5 minutes
+
     const poll = async () => {
+      if (cancelled) return;
+      // Timeout guard — don't let the user wait forever
+      if (mintStartTime && Date.now() - mintStartTime > MAX_WAIT_MS) {
+        setErrorMsg(
+          'FDC finalization is taking longer than expected (5 min). This can happen when the Coston2 attestation network is congested. ' +
+          'Your XRPL payment was sent and the attestation was submitted — they will finalize eventually. ' +
+          'Click "Start FAssets Mint" again to retry the proof lookup (no new XRPL payment needed if you use the same amount).'
+        );
+        setCurrentStep('error');
+        return;
+      }
       try {
         const resp = await fetch('/api/fassets-mint', {
           method: 'POST',
@@ -214,11 +229,11 @@ export function DepositProductionFlow() {
       } catch {}
     };
 
-    const interval = setInterval(poll, 15000);
+    const interval = setInterval(poll, 10000);
     // Also poll immediately
-    setTimeout(poll, 1000);
+    setTimeout(poll, 1500);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [mintState?.phase, mintState?.votingRound, mintState?.abiEncodedRequest]);
+  }, [mintState?.phase, mintState?.votingRound, mintState?.abiEncodedRequest, mintStartTime]);
 
   // Compute the gross XRP amount (net + fees)
   const computeGrossXrp = useCallback((netXrp: number): number => {
@@ -637,7 +652,7 @@ export function DepositProductionFlow() {
                     <li>Server sends an XRPL payment to the FAssets Core Vault (with memo encoding your EVM address)</li>
                     <li>Server verifies the payment on XRPL testnet</li>
                     <li>Server requests an FDC attestation and submits it to FdcHub</li>
-                    <li>Server waits ~90-180 seconds for the voting round to finalize</li>
+                    <li>Server waits ~2-4 minutes for the next voting round to finalize + proof indexing</li>
                     <li>Server fetches the Merkle proof from the DA Layer</li>
                     <li>Server calls AssetManagerFXRP.executeDirectMinting — FXRP is minted to your address</li>
                     <li>You sign approve + deposit via MetaMask to deposit FXRP into the vault</li>

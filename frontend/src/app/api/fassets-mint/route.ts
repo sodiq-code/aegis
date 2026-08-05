@@ -561,66 +561,78 @@ async function runPhase2(
   mintTxHash?: string;
   fxrpMinted?: string;
 }> {
-  const finalized = await isRoundFinalized(votingRound);
-  if (!finalized) {
-    return { phase: 'waiting_finalization', finalized: false };
-  }
+  // ─── ROOT CAUSE OF "stuck waiting for FDC finalization" ────────────────
+  // FDC attestations submitted in round N are voted on and finalized in
+  // round N+1 (the NEXT voting round). The proof appears in the DA Layer
+  // under round N+1 — NOT round N. The old code only checked round N: it
+  // was finalized (true) but the proof was in N+1, so fetchAttestationProof
+  // returned 404 forever and the client polled indefinitely.
+  //
+  // FIX: Try fetching the proof from a RANGE of rounds (N through N+4).
+  // The DA Layer only returns proofs for finalized, indexed rounds, so if
+  // we get a proof, it's valid for executeDirectMinting. This also handles
+  // DA Layer indexing lag and round-boundary edge cases automatically.
+  const ROUND_OFFSETS = [0, 1, 2, 3, 4];
 
-  // Round is finalized — fetch proof from DA Layer.
-  // The DA Layer may not have indexed the proof immediately after
-  // finalization, so we treat "not found" as "still waiting".
-  let merkleProof: string[];
-  let response: any;
-  try {
-    const proofResult = await fetchAttestationProof(votingRound, abiEncodedRequest);
-    merkleProof = proofResult.merkleProof;
-    response = proofResult.response;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found') || msg.includes('400') || msg.includes('404')) {
-      // DA Layer hasn't indexed the proof yet — keep waiting
-      return { phase: 'waiting_finalization', finalized: true };
-    }
-    throw e;
-  }
-
-  // Call executeDirectMinting.
-  // If it fails with PaymentAlreadyConfirmed (0x18dce79f), the payment was
-  // already minted (possibly by a bot or a previous attempt). In that case,
-  // check the user's FXRP balance — if they have FXRP, allow them to proceed.
-  try {
-    const { txHash: mintTxHash, mintedAmount } = await executeDirectMinting(merkleProof, response);
-    return {
-      phase: 'complete',
-      finalized: true,
-      mintTxHash,
-      fxrpMinted: mintedAmount,
-    };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    // PaymentAlreadyConfirmed = 0x18dce79f
-    if (msg.includes('0x18dce79f') || msg.includes('PaymentAlreadyConfirmed')) {
-      // The payment was already confirmed. Check if the user has FXRP.
-      // Extract the evmAddress from the abiEncodedRequest (last 20 bytes)
-      const evmAddress = '0x' + abiEncodedRequest.slice(-40);
-      const config = getFlareConfig();
-      const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-      const fxrpAbi = ['function balanceOf(address) view returns (uint256)'];
-      const fxrp = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.FXRP, fxrpAbi, provider);
-      const balance = await fxrp.balanceOf(evmAddress);
-      if (balance > 0) {
-        // User has FXRP (from this mint or a prior one) — allow proceeding
-        return {
-          phase: 'complete',
-          finalized: true,
-          mintTxHash: '',
-          fxrpMinted: balance.toString(),
-        };
+  for (const offset of ROUND_OFFSETS) {
+    const tryRound = votingRound + offset;
+    let proofResult: { merkleProof: string[]; response: any };
+    try {
+      proofResult = await fetchAttestationProof(tryRound, abiEncodedRequest);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Proof not in this round (not found / 400 / 404 / incomplete) — try next
+      if (
+        msg.includes('not found') ||
+        msg.includes('400') || msg.includes('404') ||
+        msg.includes('incomplete proof') || msg.includes('No proof')
+      ) {
+        continue;
       }
-      throw new Error('PaymentAlreadyConfirmed: The XRPL payment was already minted, and your address has 0 FXRP. Try with a new XRPL payment.');
+      // Real error — throw to the client
+      throw e;
     }
-    throw e;
+
+    // Got a valid proof for this round! Execute the direct minting.
+    try {
+      const { txHash: mintTxHash, mintedAmount } = await executeDirectMinting(
+        proofResult.merkleProof,
+        proofResult.response,
+      );
+      return {
+        phase: 'complete',
+        finalized: true,
+        mintTxHash,
+        fxrpMinted: mintedAmount,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // PaymentAlreadyConfirmed = 0x18dce79f — the payment was already minted
+      // (by a bot or a previous attempt). Check the user's FXRP balance; if
+      // they have FXRP, allow them to proceed to the deposit step.
+      if (msg.includes('0x18dce79f') || msg.includes('PaymentAlreadyConfirmed')) {
+        const evmAddress = '0x' + abiEncodedRequest.slice(-40);
+        const config = getFlareConfig();
+        const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+        const fxrpAbi = ['function balanceOf(address) view returns (uint256)'];
+        const fxrp = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.FXRP, fxrpAbi, provider);
+        const balance = await fxrp.balanceOf(evmAddress);
+        if (balance > 0) {
+          return {
+            phase: 'complete',
+            finalized: true,
+            mintTxHash: '',
+            fxrpMinted: balance.toString(),
+          };
+        }
+        throw new Error('PaymentAlreadyConfirmed: The XRPL payment was already minted, and your address has 0 FXRP. Try with a new XRPL payment.');
+      }
+      throw e;
+    }
   }
+
+  // No proof found in rounds N..N+4 — keep waiting (client polls again).
+  return { phase: 'waiting_finalization', finalized: false };
 }
 
 // ─── Route Handlers ───────────────────────────────────────────────────────
