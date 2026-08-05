@@ -51,7 +51,7 @@ export interface RiskScore {
     deleverage: number;
   };
   lastUpdated: string;
-  source: 'extension' | 'fallback';
+  source: 'extension' | 'fallback' | 'risk-agent';
 }
 
 // --- Vault State Hook ---
