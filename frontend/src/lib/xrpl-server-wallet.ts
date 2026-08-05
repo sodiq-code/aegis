@@ -115,8 +115,11 @@ export async function sendPaymentToCoreVault(
   // Submit
   const result = await client.submitAndWait(signed.tx_blob);
 
-  if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
-    throw new Error(`XRPL payment failed: ${result.result.meta.TransactionResult}`);
+  // Check the transaction result
+  const meta = result.result.meta as any;
+  if (!meta || (typeof meta !== 'string' && meta.TransactionResult !== 'tesSUCCESS')) {
+    const txResult = (typeof meta === 'object' && meta) ? meta.TransactionResult : 'unknown';
+    throw new Error(`XRPL payment failed: ${txResult}`);
   }
 
   return {
