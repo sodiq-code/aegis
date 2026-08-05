@@ -20,7 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getFlareConfig, AEGIS_CONTRACTS, FLARE_SYSTEM_CONTRACTS } from '@/lib/flare-config';
+import { getFlareConfig, FLARE_SYSTEM_CONTRACTS } from '@/lib/flare-config';
 import { ethers } from 'ethers';
 import {
   sendPaymentToCoreVault,
@@ -56,35 +56,53 @@ const FDC_PROTOCOL_ID = 200;
 const VERIFIER_PRIVATE_KEY = process.env.AEGIS_VERIFIER_PRIVATE_KEY ||
   '0xb3e509a0949e4d4ae489025a95eae959df178188f2c6ca130eceb2ef4ac70951';
 
-// ─── Session Storage (in-memory; demo only) ───────────────────────────────
+// ─── Stateless Design ─────────────────────────────────────────────────────
+//
+// Vercel serverless functions are stateless — each request may hit a
+// different instance, so in-memory session storage does NOT persist.
+// Instead, the flow is split into stateless phases:
+//
+// Phase 1 (POST /api/fassets-mint with autoSend=true):
+//   - Sends XRPL payment via server wallet
+//   - Verifies it on XRPL
+//   - Requests FDC attestation + submits to FdcHub
+//   - Returns: { phase: 'waiting_finalization', xrplTxHash, votingRound,
+//                abiEncodedRequest, fdcRequestTxHash }
+//
+// Phase 2 (POST /api/fassets-mint with phase='finalize'):
+//   - Client passes back { votingRound, abiEncodedRequest, evmAddress }
+//   - Server checks if the round is finalized
+//   - If not: returns { phase: 'waiting_finalization', finalized: false }
+//   - If yes: fetches proof, calls executeDirectMinting
+//     Returns: { phase: 'complete', mintTxHash, fxrpMinted }
+//
+// The client polls Phase 2 every ~15s until phase='complete'.
 
-interface MintSession {
-  sessionId: string;
-  xrplTxHash: string;
+interface MintState {
+  phase: 'initiated' | 'waiting_finalization' | 'complete' | 'error';
+  xrplTxHash?: string;
   evmAddress: string;
   amountXrp: string;
-  policyId: number;
-  autoSend: boolean;
-  step: 'initiated' | 'sending_xrpl' | 'verifying_xrpl' | 'requesting_fdc' | 'waiting_finalization' |
-        'fetching_proof' | 'minting' | 'complete' | 'error';
-  error?: string;
   votingRound?: number;
+  abiEncodedRequest?: string;
   fdcRequestTxHash?: string;
   mintTxHash?: string;
   fxrpMinted?: string;
-  createdAt: number;
-  lastUpdated: number;
+  error?: string;
+  elapsedSec?: number;
+  // For backwards-compat with the old session-based polling
+  step?: string;
+  autoSend?: boolean;
+  sessionId?: string;
 }
 
-const sessions = new Map<string, MintSession>();
+// In-memory session store (used only when the same instance is warm;
+// the stateless phase-based design is the primary path)
+const sessions = new Map<string, MintState>();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function makeSessionId(): string {
-  return 'mint_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
-}
-
-function updateSession(id: string, patch: Partial<MintSession>) {
+function updateSession(id: string, patch: Partial<MintState>) {
   const s = sessions.get(id);
   if (!s) return;
   Object.assign(s, patch, { lastUpdated: Date.now() });
@@ -344,158 +362,199 @@ async function executeDirectMinting(
   return { txHash: tx.hash, mintedAmount };
 }
 
-// ─── Background Processing ────────────────────────────────────────────────
+// ─── Phase 1: Send XRPL payment + request FDC attestation ────────────────
 
 /**
- * Run the full FAssets direct-mint flow for a session.
- * This runs in the background; the frontend polls GET for status.
+ * Phase 1 (synchronous): Sends the XRPL payment, verifies it, requests
+ * FDC attestation, and submits to FdcHub. Returns the voting round +
+ * abiEncodedRequest for the client to poll Phase 2.
  *
- * If session.autoSend is true, the server sends the XRPL payment first
- * using the server-side testnet wallet (no user action required).
+ * This runs synchronously within a single request (takes ~10-30s).
  */
-async function runMintFlow(session: MintSession) {
-  const id = session.sessionId;
-  try {
-    let xrplTxHash = session.xrplTxHash;
-
-    // Step 0 (auto-send mode): Server sends the XRPL payment
-    if (session.autoSend && !xrplTxHash) {
-      if (!isServerWalletConfigured()) {
-        throw new Error(
-          'Auto-send mode requires AEGIS_XRPL_WALLET_SEED env var. ' +
-          'Generate a wallet with: node scripts/generate-xrpl-wallet.mjs'
-        );
-      }
-
-      updateSession(id, { step: 'sending_xrpl' });
-
-      // Fetch the Core Vault address + fee schedule
-      const config = getFlareConfig();
-      const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-      const abi = [
-        'function directMintingPaymentAddress() view returns (string)',
-        'function getDirectMintingMinimumFeeUBA() view returns (uint256)',
-        'function getDirectMintingFeeBIPS() view returns (uint256)',
-        'function getDirectMintingExecutorFeeUBA() view returns (uint256)',
-      ];
-      const am = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.AssetManagerFXRP, abi, provider);
-      const coreVaultAddr = await am.directMintingPaymentAddress().catch(
-        () => 'rDhpmiPq4BVBDWMVdSrmkgt8thKyRzGV1p'
-      );
-      const minFeeUba = await am.getDirectMintingMinimumFeeUBA().catch(() => BigInt(100_000));
-      const feeBips = await am.getDirectMintingFeeBIPS().catch(() => BigInt(25));
-      const executorFeeUba = await am.getDirectMintingExecutorFeeUBA().catch(() => BigInt(100_000));
-
-      // Compute gross amount (net + fees)
-      const netXrp = parseFloat(session.amountXrp);
-      const feeDecimal = Number(feeBips) / 10000; // BIPS → decimal
-      const fee = Math.max(netXrp * feeDecimal, Number(minFeeUba) / 1e6);
-      const grossXrp = netXrp + fee + Number(executorFeeUba) / 1e6;
-      const amountDrops = String(Math.round(grossXrp * 1_000_000));
-
-      // Build the 32-byte memo hex: 8-byte prefix + 4 zero bytes + 20-byte EVM address
-      const memoPrefix = '4642505266410018'; // DIRECT_MINTING prefix
-      const recipient = session.evmAddress.slice(2).toLowerCase();
-      const memoHex = '0x' + memoPrefix + '00000000' + recipient;
-
-      // Check server wallet balance first
-      const walletBal = await getServerWalletBalance();
-      if (walletBal < grossXrp + 1) {
-        throw new Error(
-          `Server XRPL wallet has insufficient balance: ${walletBal} XRP ` +
-          `(needs ~${grossXrp.toFixed(4)} XRP). Fund the wallet at ` +
-          `https://faucet.altnet.rippletest.net/ — address: ${getServerWalletAddress()}`
-        );
-      }
-
-      // Send the payment
-      const result = await sendPaymentToCoreVault(coreVaultAddr, amountDrops, memoHex);
-      xrplTxHash = result.txHash;
-      updateSession(id, { xrplTxHash });
-
-      // Wait a few seconds for XRPL ledger to propagate
-      await new Promise(r => setTimeout(r, 3000));
-    }
-
-    // Step 1: Verify XRPL payment
-    updateSession(id, { step: 'verifying_xrpl' });
-    const payment = await verifyXrplPayment(xrplTxHash);
-    if (!payment.validated) {
-      throw new Error('XRPL payment not yet validated');
-    }
-
-    // Step 2: Prepare FDC attestation request
-    updateSession(id, { step: 'requesting_fdc' });
-    const abiEncoded = await prepareFdcAttestation(xrplTxHash, session.evmAddress);
-
-    // Step 3: Submit to FdcHub
-    const { txHash: fdcTxHash, votingRound } = await submitAttestationRequest(abiEncoded);
-    updateSession(id, {
-      fdcRequestTxHash: fdcTxHash,
-      votingRound,
-    });
-
-    // Step 4: Wait for finalization (poll every 15s, up to ~5 minutes)
-    updateSession(id, { step: 'waiting_finalization' });
-    const maxAttempts = 20; // 5 minutes at 15s intervals
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise(r => setTimeout(r, 15_000));
-      const finalized = await isRoundFinalized(votingRound);
-      if (finalized) break;
-      if (i === maxAttempts - 1) {
-        throw new Error(`FDC round ${votingRound} not finalized after ${maxAttempts * 15}s`);
-      }
-    }
-
-    // Step 5: Fetch proof from DA Layer
-    updateSession(id, { step: 'fetching_proof' });
-    const { merkleProof, response } = await fetchAttestationProof(votingRound, abiEncoded);
-
-    // Step 6: Call executeDirectMinting
-    updateSession(id, { step: 'minting' });
-    const { txHash: mintTxHash, mintedAmount } = await executeDirectMinting(merkleProof, response);
-
-    updateSession(id, {
-      step: 'complete',
-      mintTxHash,
-      fxrpMinted: mintedAmount,
-    });
-  } catch (error) {
-    updateSession(id, {
-      step: 'error',
-      error: error instanceof Error ? error.message : 'Unknown mint error',
-    });
+async function runPhase1(evmAddress: string, amountXrp: string): Promise<{
+  phase: 'waiting_finalization';
+  xrplTxHash: string;
+  votingRound: number;
+  abiEncodedRequest: string;
+  fdcRequestTxHash: string;
+}> {
+  if (!isServerWalletConfigured()) {
+    throw new Error(
+      'Auto-send mode requires AEGIS_XRPL_WALLET_SEED env var. ' +
+      'Generate a wallet with: node scripts/generate-xrpl-wallet.mjs'
+    );
   }
+
+  // Fetch the Core Vault address + fee schedule
+  const config = getFlareConfig();
+  const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+  const abi = [
+    'function directMintingPaymentAddress() view returns (string)',
+    'function getDirectMintingMinimumFeeUBA() view returns (uint256)',
+    'function getDirectMintingFeeBIPS() view returns (uint256)',
+    'function getDirectMintingExecutorFeeUBA() view returns (uint256)',
+  ];
+  const am = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.AssetManagerFXRP, abi, provider);
+  const coreVaultAddr = await am.directMintingPaymentAddress().catch(
+    () => 'rDhpmiPq4BVBDWMVdSrmkgt8thKyRzGV1p'
+  );
+  const minFeeUba = await am.getDirectMintingMinimumFeeUBA().catch(() => BigInt(100_000));
+  const feeBips = await am.getDirectMintingFeeBIPS().catch(() => BigInt(25));
+  const executorFeeUba = await am.getDirectMintingExecutorFeeUBA().catch(() => BigInt(100_000));
+
+  // Compute gross amount (net + fees)
+  const netXrp = parseFloat(amountXrp);
+  const feeDecimal = Number(feeBips) / 10000; // BIPS → decimal
+  const fee = Math.max(netXrp * feeDecimal, Number(minFeeUba) / 1e6);
+  const grossXrp = netXrp + fee + Number(executorFeeUba) / 1e6;
+  const amountDrops = String(Math.round(grossXrp * 1_000_000));
+
+  // Build the 32-byte memo hex: 8-byte prefix + 4 zero bytes + 20-byte EVM address
+  const memoPrefix = '4642505266410018'; // DIRECT_MINTING prefix
+  const recipient = evmAddress.slice(2).toLowerCase();
+  const memoHex = '0x' + memoPrefix + '00000000' + recipient;
+
+  // Check server wallet balance first
+  const walletBal = await getServerWalletBalance();
+  if (walletBal < grossXrp + 1) {
+    throw new Error(
+      `Server XRPL wallet has insufficient balance: ${walletBal} XRP ` +
+      `(needs ~${grossXrp.toFixed(4)} XRP). Fund the wallet at ` +
+      `https://faucet.altnet.rippletest.net/ — address: ${getServerWalletAddress()}`
+    );
+  }
+
+  // Send the payment
+  const sendResult = await sendPaymentToCoreVault(coreVaultAddr, amountDrops, memoHex);
+  const xrplTxHash = sendResult.txHash;
+
+  // Wait a few seconds for XRPL ledger to propagate
+  await new Promise(r => setTimeout(r, 3000));
+
+  // Verify XRPL payment
+  const payment = await verifyXrplPayment(xrplTxHash);
+  if (!payment.validated) {
+    throw new Error('XRPL payment not yet validated — try again in a few seconds');
+  }
+
+  // Prepare FDC attestation request
+  const abiEncoded = await prepareFdcAttestation(xrplTxHash, evmAddress);
+
+  // Submit to FdcHub
+  const { txHash: fdcTxHash, votingRound } = await submitAttestationRequest(abiEncoded);
+
+  return {
+    phase: 'waiting_finalization',
+    xrplTxHash,
+    votingRound,
+    abiEncodedRequest: abiEncoded,
+    fdcRequestTxHash: fdcTxHash,
+  };
+}
+
+// ─── Phase 2: Check finalization + execute direct minting ────────────────
+
+/**
+ * Phase 2 (synchronous): Checks if the voting round is finalized.
+ * If finalized, fetches the proof and calls executeDirectMinting.
+ * If not, returns phase='waiting_finalization' so the client polls again.
+ */
+async function runPhase2(
+  votingRound: number,
+  abiEncodedRequest: string,
+): Promise<{
+  phase: 'waiting_finalization' | 'complete';
+  finalized: boolean;
+  mintTxHash?: string;
+  fxrpMinted?: string;
+}> {
+  const finalized = await isRoundFinalized(votingRound);
+  if (!finalized) {
+    return { phase: 'waiting_finalization', finalized: false };
+  }
+
+  // Fetch proof from DA Layer
+  const { merkleProof, response } = await fetchAttestationProof(votingRound, abiEncodedRequest);
+
+  // Call executeDirectMinting
+  const { txHash: mintTxHash, mintedAmount } = await executeDirectMinting(merkleProof, response);
+
+  return {
+    phase: 'complete',
+    finalized: true,
+    mintTxHash,
+    fxrpMinted: mintedAmount,
+  };
 }
 
 // ─── Route Handlers ───────────────────────────────────────────────────────
 
 /**
  * POST /api/fassets-mint
- *   body (auto-send mode): { autoSend: true, evmAddress, amountXrp, policyId }
- *   body (manual mode):    { xrplTxHash, evmAddress, amountXrp, policyId }
- *   returns: { sessionId, step: 'initiated' }
  *
- * Auto-send mode: The server sends the XRPL payment using the pre-funded
- *   server-side testnet wallet (AEGIS_XRPL_WALLET_SEED). The user only
- *   needs to provide their EVM address + amount. No Xaman/XRPL wallet needed.
+ * PHASE 1 (initiate auto-send mint):
+ *   body: { autoSend: true, evmAddress, amountXrp }
+ *   - Sends XRPL payment via server wallet
+ *   - Verifies payment on XRPL
+ *   - Requests FDC attestation + submits to FdcHub
+ *   - Returns: { phase: 'waiting_finalization', xrplTxHash, votingRound,
+ *                abiEncodedRequest, fdcRequestTxHash }
  *
- * Manual mode: The user provides a pre-existing XRPL tx hash (they sent
- *   the payment themselves via Xaman).
+ * PHASE 2 (poll finalization + execute mint):
+ *   body: { phase: 'finalize', votingRound, abiEncodedRequest }
+ *   - Checks if the voting round is finalized
+ *   - If not: returns { phase: 'waiting_finalization', finalized: false }
+ *   - If yes: fetches proof, calls executeDirectMinting
+ *     Returns: { phase: 'complete', mintTxHash, fxrpMinted }
  *
- * Initiates the FAssets direct-mint flow in the background.
+ * The client calls Phase 1 once, then polls Phase 2 every ~15s until complete.
+ * This stateless design works on Vercel serverless (no in-memory session needed).
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { xrplTxHash, evmAddress, amountXrp, policyId, autoSend } = body as {
+    const {
+      // Phase 1 inputs
+      autoSend, evmAddress, amountXrp,
+      // Phase 2 inputs
+      phase, votingRound, abiEncodedRequest,
+    } = body as {
       xrplTxHash?: string;
       evmAddress?: string;
       amountXrp?: string;
       policyId?: number;
       autoSend?: boolean;
+      phase?: string;
+      votingRound?: number;
+      abiEncodedRequest?: string;
     };
 
+    // ─── Phase 2: Finalize ────────────────────────────────────────────────
+    if (phase === 'finalize') {
+      if (typeof votingRound !== 'number' || !abiEncodedRequest) {
+        return NextResponse.json(
+          { error: 'votingRound (number) and abiEncodedRequest are required for phase=finalize' },
+          { status: 400 }
+        );
+      }
+      try {
+        const result = await runPhase2(votingRound, abiEncodedRequest);
+        return NextResponse.json({
+          phase: result.phase,
+          finalized: result.finalized,
+          ...(result.mintTxHash ? { mintTxHash: result.mintTxHash } : {}),
+          ...(result.fxrpMinted ? { fxrpMinted: result.fxrpMinted } : {}),
+        });
+      } catch (error) {
+        return NextResponse.json({
+          phase: 'error',
+          finalized: false,
+          error: error instanceof Error ? error.message : 'Phase 2 failed',
+        }, { status: 500 });
+      }
+    }
+
+    // ─── Phase 1: Initiate auto-send mint ─────────────────────────────────
     if (!evmAddress || !ethers.isAddress(evmAddress)) {
       return NextResponse.json(
         { error: 'evmAddress must be a valid EVM address' },
@@ -509,56 +568,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate inputs based on mode
-    const useAutoSend = !!autoSend;
-    if (useAutoSend) {
-      if (!isServerWalletConfigured()) {
-        return NextResponse.json(
-          {
-            error: 'Auto-send mode is not available: AEGIS_XRPL_WALLET_SEED env var is not set on the server.',
-            hint: 'Generate a wallet with: node scripts/generate-xrpl-wallet.mjs',
-          },
-          { status: 503 }
-        );
-      }
-    } else {
-      if (!xrplTxHash || !xrplTxHash.match(/^[0-9A-Fa-f]{64}$/)) {
-        return NextResponse.json(
-          { error: 'xrplTxHash must be a 64-character hex string (or set autoSend: true)' },
-          { status: 400 }
-        );
-      }
+    if (!autoSend) {
+      return NextResponse.json(
+        { error: 'autoSend: true is required (or provide phase: "finalize" for Phase 2)' },
+        { status: 400 }
+      );
     }
 
-    const sessionId = makeSessionId();
-    const session: MintSession = {
-      sessionId,
-      xrplTxHash: xrplTxHash || '',
-      evmAddress,
-      amountXrp,
-      policyId: policyId ?? 2,
-      autoSend: useAutoSend,
-      step: 'initiated',
-      createdAt: Date.now(),
-      lastUpdated: Date.now(),
-    };
-    sessions.set(sessionId, session);
+    if (!isServerWalletConfigured()) {
+      return NextResponse.json(
+        {
+          error: 'Auto-send mode is not available: AEGIS_XRPL_WALLET_SEED env var is not set on the server.',
+          hint: 'Generate a wallet with: node scripts/generate-xrpl-wallet.mjs',
+        },
+        { status: 503 }
+      );
+    }
 
-    // Start the background flow
-    runMintFlow(session).catch(err => {
-      updateSession(sessionId, {
-        step: 'error',
-        error: `Background flow crashed: ${err instanceof Error ? err.message : String(err)}`,
-      });
-    });
+    // Run Phase 1 synchronously (sends XRPL payment + submits FDC attestation)
+    // This takes ~10-30s
+    const result = await runPhase1(evmAddress, amountXrp);
 
     return NextResponse.json({
-      sessionId,
-      step: session.step,
-      autoSend: useAutoSend,
-      message: useAutoSend
-        ? 'Auto-send FAssets mint flow initiated. Server will send the XRPL payment + run FDC attestation. Poll GET /api/fassets-mint?sessionId=X for status.'
-        : 'FAssets direct-mint flow initiated. Poll GET /api/fassets-mint?sessionId=X for status.',
+      phase: result.phase,
+      xrplTxHash: result.xrplTxHash,
+      votingRound: result.votingRound,
+      abiEncodedRequest: result.abiEncodedRequest,
+      fdcRequestTxHash: result.fdcRequestTxHash,
+      message: 'XRPL payment sent + FDC attestation submitted. Poll POST with phase=finalize every 15s.',
     });
   } catch (error) {
     return NextResponse.json(

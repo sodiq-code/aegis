@@ -80,15 +80,15 @@ interface FassetsInfo {
   timing: { roundDurationSec: number; expectedFinalizationSec: number };
 }
 
-interface MintSession {
-  sessionId: string;
-  step: string;
-  autoSend?: boolean;
+interface MintState {
+  phase: 'initiated' | 'waiting_finalization' | 'complete' | 'error';
+  xrplTxHash?: string;
   votingRound?: number;
+  abiEncodedRequest?: string;
   fdcRequestTxHash?: string;
   mintTxHash?: string;
   fxrpMinted?: string;
-  xrplTxHash?: string;
+  finalized?: boolean;
   error?: string;
   elapsedSec?: number;
 }
@@ -135,7 +135,8 @@ export function DepositProductionFlow() {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [fassetsInfo, setFassetsInfo] = useState<FassetsInfo | null>(null);
   const [currentStep, setCurrentStep] = useState<ProdStep>('idle');
-  const [mintSession, setMintSession] = useState<MintSession | null>(null);
+  const [mintState, setMintState] = useState<MintState | null>(null);
+  const [mintStartTime, setMintStartTime] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [approveTxHash, setApproveTxHash] = useState('');
   const [depositTxHash, setDepositTxHash] = useState('');
@@ -146,6 +147,9 @@ export function DepositProductionFlow() {
   const evmRecipientAddress = walletAddress || '';
   const isEvmConnected = evmStatus === 'connected' && evmType === 'evm' && !!walletAddress;
   const isRunning = ['minting', 'approving', 'depositing'].includes(currentStep);
+
+  // Compute elapsed seconds for mint progress
+  const elapsedSec = mintStartTime ? Math.floor((Date.now() - mintStartTime) / 1000) : undefined;
 
   // Load FAssets info + policies on mount
   useEffect(() => {
@@ -173,28 +177,48 @@ export function DepositProductionFlow() {
     return () => { mounted = false; };
   }, []);
 
-  // Poll mint session status
+  // Poll Phase 2 (finalization) every 15s until complete or error
   useEffect(() => {
-    if (!mintSession || mintSession.step === 'complete' || mintSession.step === 'error') {
-      return;
-    }
+    if (!mintState || mintState.phase !== 'waiting_finalization') return;
+    if (!mintState.votingRound || !mintState.abiEncodedRequest) return;
+
+    let cancelled = false;
     const poll = async () => {
       try {
-        const resp = await fetch(`/api/fassets-mint?sessionId=${mintSession.sessionId}`);
-        if (!resp.ok) return;
-        const data: MintSession = await resp.json();
-        setMintSession(data);
-        if (data.step === 'complete') {
+        const resp = await fetch('/api/fassets-mint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phase: 'finalize',
+            votingRound: mintState.votingRound,
+            abiEncodedRequest: mintState.abiEncodedRequest,
+          }),
+        });
+        if (!resp.ok || cancelled) return;
+        const data = await resp.json();
+        if (cancelled) return;
+
+        if (data.phase === 'complete') {
+          setMintState(prev => prev ? {
+            ...prev,
+            phase: 'complete',
+            mintTxHash: data.mintTxHash,
+            fxrpMinted: data.fxrpMinted,
+          } : prev);
           setCurrentStep('evm-connect');
-        } else if (data.step === 'error') {
+        } else if (data.phase === 'error') {
           setErrorMsg(data.error || 'Mint failed');
           setCurrentStep('error');
         }
+        // else: still waiting_finalization — keep polling
       } catch {}
     };
-    const interval = setInterval(poll, 3000);
-    return () => clearInterval(interval);
-  }, [mintSession]);
+
+    const interval = setInterval(poll, 15000);
+    // Also poll immediately
+    setTimeout(poll, 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [mintState?.phase, mintState?.votingRound, mintState?.abiEncodedRequest]);
 
   // Compute the gross XRP amount (net + fees)
   const computeGrossXrp = useCallback((netXrp: number): number => {
@@ -228,7 +252,7 @@ export function DepositProductionFlow() {
     }
   }, [evmRecipientAddress]);
 
-  // Initiate the FAssets mint flow (auto-send mode)
+  // Initiate the FAssets mint flow (Phase 1: auto-send)
   const handleInitiateMint = useCallback(async () => {
     if (!evmRecipientAddress) {
       setErrorMsg('Connect MetaMask first to receive the minted FXRP');
@@ -237,6 +261,12 @@ export function DepositProductionFlow() {
     }
     setErrorMsg('');
     setCurrentStep('minting');
+    setMintStartTime(Date.now());
+    // Show "sending XRPL" sub-step immediately
+    setMintState({
+      phase: 'initiated',
+      xrplTxHash: undefined,
+    });
     try {
       const resp = await fetch('/api/fassets-mint', {
         method: 'POST',
@@ -245,7 +275,6 @@ export function DepositProductionFlow() {
           autoSend: true,
           evmAddress: evmRecipientAddress,
           amountXrp,
-          policyId: parseInt(policyId, 10),
         }),
       });
       if (!resp.ok) {
@@ -253,12 +282,20 @@ export function DepositProductionFlow() {
         throw new Error(err.error || 'Failed to initiate mint');
       }
       const data = await resp.json();
-      setMintSession({ sessionId: data.sessionId, step: data.step, autoSend: data.autoSend });
+      // Phase 1 returns { phase: 'waiting_finalization', xrplTxHash, votingRound, abiEncodedRequest, fdcRequestTxHash }
+      setMintState({
+        phase: data.phase,
+        xrplTxHash: data.xrplTxHash,
+        votingRound: data.votingRound,
+        abiEncodedRequest: data.abiEncodedRequest,
+        fdcRequestTxHash: data.fdcRequestTxHash,
+      });
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Mint initiation failed');
       setCurrentStep('error');
+      setMintState(null);
     }
-  }, [evmRecipientAddress, amountXrp, policyId]);
+  }, [evmRecipientAddress, amountXrp]);
 
   // Send a MetaMask transaction
   const sendTx = useCallback(async (to: string, data: string): Promise<string> => {
@@ -472,12 +509,12 @@ export function DepositProductionFlow() {
         {/* Step 2: Amount + Start Mint */}
         <div className={`p-4 rounded-lg border-2 transition-colors ${
           currentStep === 'minting' ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30' :
-          mintSession?.step === 'complete' ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30' :
+          mintState?.phase === 'complete' ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30' :
           isEvmConnected ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30' :
           'border-muted opacity-60'
         }`}>
           <div className="flex items-center gap-2 mb-3">
-            {mintSession?.step === 'complete' ? (
+            {mintState?.phase === 'complete' ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             ) : currentStep === 'minting' ? (
               <Loader2 className="h-5 w-5 text-purple-600 animate-spin" />
@@ -618,94 +655,105 @@ export function DepositProductionFlow() {
         </div>
 
         {/* Step 3: FAssets Mint Progress */}
-        {(mintSession || currentStep === 'minting') && (
+        {(mintState || currentStep === 'minting') && (
           <div className={`p-4 rounded-lg border-2 transition-colors ${
-            currentStep === 'minting' ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30' :
-            mintSession?.step === 'complete' ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30' :
-            mintSession?.step === 'error' ? 'border-red-300 bg-red-50 dark:bg-red-950/30' :
-            'border-muted'
+            mintState?.phase === 'complete' ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30' :
+            mintState?.phase === 'error' ? 'border-red-300 bg-red-50 dark:bg-red-950/30' :
+            'border-purple-400 bg-purple-50 dark:bg-purple-950/30'
           }`}>
             <div className="flex items-center gap-2 mb-3">
-              {mintSession?.step === 'complete' ? (
+              {mintState?.phase === 'complete' ? (
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              ) : mintSession?.step === 'error' ? (
+              ) : mintState?.phase === 'error' ? (
                 <XCircle className="h-5 w-5 text-red-600" />
               ) : (
                 <Loader2 className="h-5 w-5 text-purple-600 animate-spin" />
               )}
               <h4 className="font-medium text-sm">Step 3: FAssets Direct-Mint (FDC Attestation)</h4>
-              {mintSession?.elapsedSec && (
+              {elapsedSec !== undefined && mintState?.phase !== 'complete' && (
                 <Badge variant="outline" className="ml-auto text-[10px]">
                   <Clock className="h-3 w-3 mr-1" />
-                  {Math.floor(mintSession.elapsedSec / 60)}:{(mintSession.elapsedSec % 60).toString().padStart(2, '0')}
+                  {Math.floor(elapsedSec / 60)}:{(elapsedSec % 60).toString().padStart(2, '0')}
                 </Badge>
               )}
             </div>
 
-            {mintSession && (
+            {mintState && (
               <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Current sub-step:</span>
-                  <span className="font-medium">
-                    {MINT_STEP_LABELS[mintSession.step]?.label || mintSession.step}
-                  </span>
-                </div>
-                <p className="text-muted-foreground">
-                  {MINT_STEP_LABELS[mintSession.step]?.description}
-                </p>
-                {mintSession.xrplTxHash && (
+                {/* Derive the current sub-step label from the phase + state */}
+                {(() => {
+                  let stepKey = 'initiated';
+                  if (mintState.phase === 'complete') stepKey = 'complete';
+                  else if (mintState.phase === 'error') stepKey = 'error';
+                  else if (mintState.phase === 'waiting_finalization') {
+                    if (mintState.abiEncodedRequest) stepKey = 'waiting_finalization';
+                    else if (mintState.xrplTxHash) stepKey = 'verifying_xrpl';
+                    else stepKey = 'sending_xrpl';
+                  }
+                  const label = MINT_STEP_LABELS[stepKey];
+                  return (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Current sub-step:</span>
+                        <span className="font-medium">{label?.label || stepKey}</span>
+                      </div>
+                      <p className="text-muted-foreground">{label?.description}</p>
+                    </>
+                  );
+                })()}
+                {mintState.xrplTxHash && (
                   <div className="flex items-center gap-1">
                     <span className="text-muted-foreground">XRPL payment tx:</span>
                     <a
-                      href={`https://testnet.xrpl.org/transactions/${mintSession.xrplTxHash}`}
+                      href={`https://testnet.xrpl.org/transactions/${mintState.xrplTxHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-mono text-[10px] text-purple-600 hover:underline inline-flex items-center gap-0.5"
                     >
-                      {mintSession.xrplTxHash.slice(0, 18)}...<ExternalLink className="h-2.5 w-2.5" />
+                      {mintState.xrplTxHash.slice(0, 18)}...<ExternalLink className="h-2.5 w-2.5" />
                     </a>
                   </div>
                 )}
-                {mintSession.votingRound && (
+                {mintState.votingRound && (
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Voting round:</span>
-                    <code className="font-mono">{mintSession.votingRound}</code>
+                    <code className="font-mono">{mintState.votingRound}</code>
                   </div>
                 )}
-                {mintSession.fdcRequestTxHash && (
+                {mintState.fdcRequestTxHash && (
                   <div className="flex items-center gap-1">
                     <span className="text-muted-foreground">FDC request tx:</span>
                     <a
-                      href={`https://coston2-explorer.flare.network/tx/${mintSession.fdcRequestTxHash}`}
+                      href={`https://coston2-explorer.flare.network/tx/${mintState.fdcRequestTxHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-mono text-[10px] text-purple-600 hover:underline inline-flex items-center gap-0.5"
                     >
-                      {mintSession.fdcRequestTxHash.slice(0, 18)}...<ExternalLink className="h-2.5 w-2.5" />
+                      {mintState.fdcRequestTxHash.slice(0, 18)}...<ExternalLink className="h-2.5 w-2.5" />
                     </a>
                   </div>
                 )}
-                {mintSession.mintTxHash && (
+                {mintState.mintTxHash && (
                   <div className="flex items-center gap-1">
                     <span className="text-muted-foreground">Mint tx:</span>
                     <a
-                      href={`https://coston2-explorer.flare.network/tx/${mintSession.mintTxHash}`}
+                      href={`https://coston2-explorer.flare.network/tx/${mintState.mintTxHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-mono text-[10px] text-emerald-600 hover:underline inline-flex items-center gap-0.5"
                     >
-                      {mintSession.mintTxHash.slice(0, 18)}...<ExternalLink className="h-2.5 w-2.5" />
+                      {mintState.mintTxHash.slice(0, 18)}...<ExternalLink className="h-2.5 w-2.5" />
                     </a>
                   </div>
                 )}
-                {mintSession.fxrpMinted && (
+                {mintState.fxrpMinted && (
                   <div className="flex items-center justify-between p-2 rounded bg-emerald-50 dark:bg-emerald-950/50">
                     <span className="text-emerald-700 dark:text-emerald-300 font-medium">FXRP minted to your address:</span>
-                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">{(Number(mintSession.fxrpMinted) / 1e6).toFixed(6)} FXRP</span>
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">{(Number(mintState.fxrpMinted) / 1e6).toFixed(6)} FXRP</span>
                   </div>
                 )}
-                {mintSession.error && (
-                  <p className="text-red-700 dark:text-red-300 text-xs break-all">{mintSession.error}</p>
+                {mintState.error && (
+                  <p className="text-red-700 dark:text-red-300 text-xs break-all">{mintState.error}</p>
                 )}
               </div>
             )}
@@ -713,7 +761,7 @@ export function DepositProductionFlow() {
         )}
 
         {/* Step 4: EVM Deposit (approve + depositFXRP) */}
-        {mintSession?.step === 'complete' && (
+        {mintState?.phase === 'complete' && (
           <div className={`p-4 rounded-lg border-2 transition-colors ${
             currentStep === 'approving' || currentStep === 'depositing'
               ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30' :
@@ -811,7 +859,8 @@ export function DepositProductionFlow() {
                 size="sm"
                 onClick={() => {
                   setCurrentStep('idle');
-                  setMintSession(null);
+                  setMintState(null);
+                  setMintStartTime(null);
                   setApproveTxHash('');
                   setDepositTxHash('');
                   setErrorMsg('');
