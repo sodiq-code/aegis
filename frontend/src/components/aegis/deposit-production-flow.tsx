@@ -157,7 +157,9 @@ export function DepositProductionFlow() {
 
   const isEvmConnected = evmStatus === 'connected' && evmType === 'evm' && !!walletAddress;
   const isXrplConnected = xaman.mode === 'connected' && !!xaman.address;
-  const isRunning = currentStep !== 'xrpl-connect' && currentStep !== 'complete' && currentStep !== 'error';
+  // isRunning is TRUE only when we're actively minting/approving/depositing.
+  // During 'xrpl-payment' step, the user should be able to edit amount + policy.
+  const isRunning = ['minting', 'approving', 'depositing'].includes(currentStep);
 
   // Check if Xaman API key is configured (server-side)
   useEffect(() => {
