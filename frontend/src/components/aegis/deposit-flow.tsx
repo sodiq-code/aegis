@@ -26,13 +26,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
 import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import { useWalletStore } from '@/lib/wallet-auth';
@@ -321,23 +314,20 @@ export function DepositFlow() {
               <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
               Risk Policy
             </Label>
-            <Select value={policyId} onValueChange={setPolicyId} disabled={isRunning || policies.length === 0}>
-              <SelectTrigger id="policy-select">
-                <SelectValue placeholder={policies.length === 0 ? 'Loading policies...' : 'Select policy'} />
-              </SelectTrigger>
-              <SelectContent>
-                {policies.map(p => (
-                  <SelectItem key={p.id} value={String(p.id)} disabled={!p.isActive}>
-                    <div className="flex flex-col">
-                      <span>{p.name} <span className="text-xs text-muted-foreground">({p.riskLevel})</span></span>
-                      <span className="text-xs text-muted-foreground">
-                        Max drawdown: {p.maxDrawdownBps / 100}% · Max exposure: {p.maxSingleExposureBps / 100}%
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              id="policy-select"
+              value={policyId}
+              onChange={(e) => setPolicyId(e.target.value)}
+              disabled={isRunning || policies.length === 0}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {policies.length === 0 && <option>Loading policies...</option>}
+              {policies.map(p => (
+                <option key={p.id} value={String(p.id)} disabled={!p.isActive}>
+                  {p.name} ({p.riskLevel}) — Max drawdown: {p.maxDrawdownBps / 100}%, Max exposure: {p.maxSingleExposureBps / 100}%
+                </option>
+              ))}
+            </select>
             {selectedPolicy && (
               <p className="text-xs text-muted-foreground">
                 {selectedPolicy.description} · Min collateral ratio: {selectedPolicy.minCollateralRatio / 100}%
