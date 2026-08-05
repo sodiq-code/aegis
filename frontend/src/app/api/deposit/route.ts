@@ -22,6 +22,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFlareConfig, AEGIS_CONTRACTS, FLARE_SYSTEM_CONTRACTS } from '@/lib/flare-config';
 import { ethers } from 'ethers';
 
+// Deposit prep reads on-chain policy/vault data — allow up to 60s.
+export const maxDuration = 60;
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * Compute the ERC20 approve(address,uint256) calldata.
  * selector: 0x095ea7b3

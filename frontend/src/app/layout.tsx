@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   keywords: ["Aegis", "Flare", "FAssets", "FXRP", "FTSO", "FDC", "FCC", "PMW", "institutional treasury", "XRP", "cross-chain", "solvency"],
   authors: [{ name: "Aegis Team" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
   },
   openGraph: {
     title: "Aegis — Institutional Treasury Layer on Flare",

@@ -29,6 +29,15 @@ import {
   getServerWalletBalance,
 } from '@/lib/xrpl-server-wallet';
 
+// ─── Vercel Serverless Config ──────────────────────────────────────────────
+// Phase 1 (XRPL payment + FDC attestation request) takes ~30s. Phase 2 polls
+// are fast. Allow up to 300s so the mint flow never times out on Vercel.
+// Without this, Vercel uses the plan default (10s Hobby / 15s Pro) and the
+// mint hangs forever ("processing for a while, no result").
+export const maxDuration = 300;
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // ─── Constants (from PHASE-A-RESEARCH) ─────────────────────────────────────
 
 const XRPL_TESTNET_WS = 'wss://s.altnet.rippletest.net:51233';
