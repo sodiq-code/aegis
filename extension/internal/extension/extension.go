@@ -685,10 +685,11 @@ func (a *positionProviderAdapter) GetActivePositionCount() int {
 // tracks the last published root (seeded from the on-chain current root at
 // first use) and skips the on-chain tx when the root is unchanged.
 type onchainPublisherAdapter struct {
-        publisher *onchain.OnChainPublisher
-        mu        sync.Mutex
-        lastRoot  string
-        inited    bool
+        publisher      *onchain.OnChainPublisher
+        mu             sync.Mutex
+        lastRoot       string
+        inited         bool
+        publishedRoots map[string]bool // roots we have already published (or tried to)
 }
 
 func (a *onchainPublisherAdapter) PublishSolvencyProof(
@@ -705,6 +706,10 @@ func (a *onchainPublisherAdapter) PublishSolvencyProof(
         a.mu.Lock()
         defer a.mu.Unlock()
 
+        if a.publishedRoots == nil {
+                a.publishedRoots = make(map[string]bool)
+        }
+
         // Refresh lastRoot from the on-chain state on every call. This lets the
         // daemon detect when an external publisher (e.g. the dashboard
         // /api/solvency or /api/rebalance routes) has changed the on-chain root,
@@ -716,12 +721,24 @@ func (a *onchainPublisherAdapter) PublishSolvencyProof(
                         fmt.Printf("[TEE] On-chain root changed externally (%s… → %s…) — will republish\n", truncHex(a.lastRoot, 18), truncHex(cur, 18))
                 }
                 a.lastRoot = cur
+                // The on-chain current root is, by definition, already published.
+                a.publishedRoots[cur] = true
         }
         a.inited = true
 
         // Skip republishing an unchanged root — the contract rejects duplicates.
         if merkleRoot != "" && merkleRoot == a.lastRoot {
                 fmt.Printf("[TEE] Solvency root unchanged (%s…) — skipping publish (already on-chain)\n", truncHex(merkleRoot, 18))
+                return "", nil
+        }
+
+        // Skip roots we have already published (or tried to) in this session.
+        // The SolvencyRoot contract rejects ANY root that has EVER been
+        // published, not just the current one. So if an external publisher
+        // changed the on-chain root after we published ours, we cannot
+        // re-publish ours — it would revert with "proof already exists".
+        if a.publishedRoots[merkleRoot] {
+                fmt.Printf("[TEE] Root %s… already published in this session — skipping (contract rejects duplicates)\n", truncHex(merkleRoot, 18))
                 return "", nil
         }
 
@@ -733,19 +750,19 @@ func (a *onchainPublisherAdapter) PublishSolvencyProof(
                 votingRound,
         )
         if err != nil {
-                // A revert may simply mean the root was already published by
-                // another attester (e.g. the dashboard /api/solvency route).
-                // Re-read the on-chain root; if it matches, treat as success.
-                if strings.Contains(err.Error(), "reverted") {
-                        if cur, rerr := a.publisher.GetCurrentRoot(); rerr == nil && cur == merkleRoot {
-                                a.lastRoot = merkleRoot
-                                fmt.Printf("[TEE] Root %s… already on-chain (revert treated as success)\n", truncHex(merkleRoot, 18))
-                                return "", nil
-                        }
+                // A revert may mean the root was already published by another
+                // attester. Treat "proof already exists" / "reverted" as success
+                // and record the root so we don't retry it every 90s.
+                if strings.Contains(err.Error(), "reverted") || strings.Contains(err.Error(), "already exists") {
+                        a.publishedRoots[merkleRoot] = true
+                        a.lastRoot = merkleRoot
+                        fmt.Printf("[TEE] Root %s… already published (revert treated as success)\n", truncHex(merkleRoot, 18))
+                        return "", nil
                 }
                 return "", err
         }
 
+        a.publishedRoots[merkleRoot] = true
         a.lastRoot = merkleRoot
         return proof.TxHash.Hex(), nil
 }
