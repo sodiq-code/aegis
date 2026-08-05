@@ -984,6 +984,11 @@ func (el *EventListener) Close() {
         }
 }
 
+// GetHeadBlock returns the current head block number from the RPC.
+func (el *EventListener) GetHeadBlock() (uint64, error) {
+        return el.client.BlockNumber(context.Background())
+}
+
 // FetchDepositEvents fetches DepositMade events from the VaultCore contract.
 func (el *EventListener) FetchDepositEvents(fromBlock uint64, toBlock *uint64) ([]*OnChainEvent, error) {
         return el.fetchEvents("DepositMade", fromBlock, toBlock)
@@ -1016,39 +1021,62 @@ func (el *EventListener) FetchAllEvents(fromBlock uint64, toBlock *uint64) ([]*O
 }
 
 // fetchEvents fetches events of a specific type from the VaultCore contract.
+// Coston2's RPC caps eth_getLogs at ~30 blocks per request, so we chunk.
 func (el *EventListener) fetchEvents(eventName string, fromBlock uint64, toBlock *uint64) ([]*OnChainEvent, error) {
-        // Build the event query
-        query := ethereum.FilterQuery{
-                FromBlock: new(big.Int).SetUint64(fromBlock),
-                Addresses: []common.Address{el.vaultCoreAddr},
-        }
-
-        if toBlock != nil {
-                query.ToBlock = new(big.Int).SetUint64(*toBlock)
-        }
-
         // Get the event ID from the ABI
         event, ok := el.vaultCoreABI.Events[eventName]
         if !ok {
                 return nil, fmt.Errorf("event %s not found in ABI", eventName)
         }
-        query.Topics = [][]common.Hash{{event.ID}}
 
-        logs, err := el.client.FilterLogs(context.Background(), query)
-        if err != nil {
-                return nil, fmt.Errorf("failed to filter logs: %w", err)
-        }
-
-        events := make([]*OnChainEvent, 0, len(logs))
-        for _, vLog := range logs {
-                event, err := el.parseLogToEvent(eventName, vLog)
+        // Determine the effective to-block: if nil, use the latest block.
+        var endBlock uint64
+        if toBlock != nil {
+                endBlock = *toBlock
+        } else {
+                head, err := el.client.BlockNumber(context.Background())
                 if err != nil {
-                        logger.Warnf("Failed to parse log: %v", err)
-                        continue
+                        return nil, fmt.Errorf("failed to get head block: %w", err)
                 }
-                events = append(events, event)
+                endBlock = head
         }
-        logger.Infof("Fetched %d %s events from blocks %d to %v", len(events), eventName, fromBlock, toBlock)
+
+        if fromBlock > endBlock {
+                return []*OnChainEvent{}, nil
+        }
+
+        // Coston2 caps eth_getLogs at 30 blocks per request — use 25 to be safe.
+        const chunkSize = uint64(25)
+
+        events := make([]*OnChainEvent, 0)
+        for cur := fromBlock; cur <= endBlock; cur += chunkSize {
+                curEnd := cur + chunkSize - 1
+                if curEnd > endBlock {
+                        curEnd = endBlock
+                }
+                query := ethereum.FilterQuery{
+                        FromBlock: new(big.Int).SetUint64(cur),
+                        ToBlock:   new(big.Int).SetUint64(curEnd),
+                        Addresses: []common.Address{el.vaultCoreAddr},
+                        Topics:    [][]common.Hash{{event.ID}},
+                }
+                logs, err := el.client.FilterLogs(context.Background(), query)
+                if err != nil {
+                        return nil, fmt.Errorf("failed to filter logs (%d→%d): %w", cur, curEnd, err)
+                }
+                for _, vLog := range logs {
+                        ev, err := el.parseLogToEvent(eventName, vLog)
+                        if err != nil {
+                                logger.Warnf("Failed to parse log: %v", err)
+                                continue
+                        }
+                        events = append(events, ev)
+                }
+                if curEnd == endBlock {
+                        break
+                }
+        }
+        logger.Infof("Fetched %d %s events from blocks %d to %d", len(events), eventName, fromBlock, endBlock)
 
         return events, nil
 }

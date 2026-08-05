@@ -2,7 +2,6 @@ package extension
 
 import (
         "bytes"
-        "context"
         "encoding/json"
         "fmt"
         "math/big"
@@ -674,59 +673,75 @@ func (e *Extension) startEventListenerLoop() {
         ticker := time.NewTicker(15 * time.Second)
         defer ticker.Stop()
 
-        // Track the last-processed block to avoid re-processing events
+        // Track the last-processed block to avoid re-processing events.
+        // Initialize to currentBlock - 1000 so we catch very recent deposits
+        // without trying to backfill 150k blocks on the first tick (Coston2
+        // caps eth_getLogs at ~30 blocks per request — chunking 150k blocks
+        // would be 6000 requests). The TEE's job is to publish fresh roots
+        // for new deposits; historical state is already on-chain.
         lastProcessedBlock := uint64(0)
+
+        // Track processed tx hashes to avoid double-counting deposits on re-poll
+        processedTxHashes := make(map[string]bool)
 
         for {
                 select {
                 case <-ticker.C:
-                        ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-                        _ = ctx
-                        cancel()
-
-                        // Fetch recent deposit events
-                        // Start from block 33500000 to catch all historical deposits
-                        fromBlock := lastProcessedBlock
-                        if fromBlock == 0 {
-                                fromBlock = 33500000
+                        // On first tick, set lastProcessedBlock to ~1000 blocks ago
+                        // so we catch any very recent deposits without backfilling.
+                        if lastProcessedBlock == 0 {
+                                head, err := e.EventListener.GetHeadBlock()
+                                if err != nil {
+                                        logger.Warnf("EventListener: failed to get head block: %v", err)
+                                        continue
+                                }
+                                if head > 1000 {
+                                        lastProcessedBlock = head - 1000
+                                } else {
+                                        lastProcessedBlock = 1
+                                }
+                                logger.Infof("EventListener: initial scan from block %d (head=%d)", lastProcessedBlock, head)
                         }
 
-                        events, err := e.EventListener.FetchDepositEvents(fromBlock, nil)
+                        events, err := e.EventListener.FetchDepositEvents(lastProcessedBlock, nil)
                         if err != nil {
                                 logger.Warnf("EventListener: failed to fetch deposit events: %v", err)
                                 continue
                         }
 
-                        if len(events) == 0 {
+                        // Filter out already-processed events
+                        var newEvents []*position.OnChainEvent
+                        for _, ev := range events {
+                                if processedTxHashes[ev.TxHash] {
+                                        continue
+                                }
+                                processedTxHashes[ev.TxHash] = true
+                                newEvents = append(newEvents, ev)
+                                if ev.BlockNum > lastProcessedBlock {
+                                        lastProcessedBlock = ev.BlockNum
+                                }
+                        }
+
+                        if len(newEvents) == 0 {
                                 continue
                         }
 
-                        // Feed each deposit into the PositionComputer
-                        for _, event := range events {
-                                // Convert the OnChainEvent to a DepositEvent and call PositionComputer.RecordDeposit
-                                // The PositionComputer.RecordDeposit signature takes a *DepositEvent
-                                depositEvent := &position.DepositEvent{
-                                        PositionID:  event.PositionID,
-                                        Depositor:   event.Depositor,
-                                        FxrpAmount:  event.FxrpAmount,
-                                        UsdValue:    event.UsdValue,
-                                        Timestamp:   time.Unix(int64(event.Timestamp), 0),
-                                        BlockNumber: event.BlockNum,
-                                        TxHash:      event.TxHash,
-                                }
-                                if err := e.PositionComputer.RecordDeposit(depositEvent); err != nil {
-                                        logger.Warnf("EventListener: failed to record deposit: %v", err)
+                        // Feed each new deposit into the PositionComputer via ProcessEvent
+                        // (processDeposit reads Amount, USDValue, PositionID, Depositor, Timestamp directly)
+                        newDeposits := uint64(0)
+                        for _, event := range newEvents {
+                                if err := e.PositionComputer.ProcessEvent(event); err != nil {
+                                        logger.Warnf("EventListener: failed to process deposit: %v", err)
                                 } else {
-                                        logger.Infof("EventListener: recorded deposit positionId=%d depositor=%s fxrp=%d",
-                                                event.PositionID, event.Depositor, event.FxrpAmount)
-                                }
-                                if event.BlockNum > lastProcessedBlock {
-                                        lastProcessedBlock = event.BlockNum
+                                        logger.Infof("EventListener: recorded deposit positionId=%d depositor=%s amount=%d",
+                                                event.PositionID, event.Depositor, event.Amount)
+                                        newDeposits++
                                 }
                         }
 
                         // After recording new deposits, compute and publish a fresh solvency proof
-                        if e.OnChainPublisher != nil && e.OnChainPublisher.IsConnected() {
+                        // This is the "TEE republishes on deposit" loop that makes Flow A real.
+                        if newDeposits > 0 && e.OnChainPublisher != nil && e.OnChainPublisher.IsConnected() {
                                 e.publishFreshSolvencyProof()
                         }
                 }
@@ -735,6 +750,7 @@ func (e *Extension) startEventListenerLoop() {
 
 // publishFreshSolvencyProof computes a new Merkle root from the current
 // PositionComputer state and publishes it on-chain via the OnChainPublisher.
+// This is the TEE's "republish on deposit" loop.
 func (e *Extension) publishFreshSolvencyProof() {
         if e.PositionComputer == nil || e.OnChainPublisher == nil {
                 return
@@ -757,14 +773,15 @@ func (e *Extension) publishFreshSolvencyProof() {
                 collateralRatio = (totalCollateral * 10000) / totalLiabilities
         }
 
-        // Get the real current voting round from FlareSystemsManager
-        // (The OnChainPublisher already has the RPC connection; we'd need to add
-        // a getCurrentVotingRound helper. For now, we pass 0 and the publisher
-        // can fill it in. In the next iteration, we'll add a proper read.)
-        // TODO: read FlareSystemsManager.getCurrentVotingEpochId() here
-        votingRound := uint64(0)
+        // Read the real current voting round from FlareSystemsManager.
+        // This is critical — the auditor's FDC cross-check depends on a real round ID.
+        votingRound, err := e.OnChainPublisher.GetCurrentVotingRound()
+        if err != nil {
+                logger.Warnf("publishFreshSolvencyProof: failed to read voting round from FlareSystemsManager: %v", err)
+                votingRound = 0
+        }
 
-        // Compute and store the proof via the SolvencyAttestor
+        // Compute and store the proof via the SolvencyAttestor (in-memory record)
         if e.SolvencyAttestor != nil {
                 _, err = e.SolvencyAttestor.ComputeAndPublishSolvencyProof(
                         merkleRoot,
@@ -778,7 +795,7 @@ func (e *Extension) publishFreshSolvencyProof() {
                 }
         }
 
-        // Publish on-chain
+        // Publish on-chain via the verifier-key-signed transaction
         proof, err := e.OnChainPublisher.PublishSolvencyProof(
                 merkleRoot,
                 totalCollateral,
@@ -791,8 +808,8 @@ func (e *Extension) publishFreshSolvencyProof() {
                 return
         }
 
-        logger.Infof("publishFreshSolvencyProof: published root=%s tx=%s block=%d",
-                merkleRoot[:16]+"...", proof.TxHash.Hex(), proof.BlockNumber)
+        logger.Infof("publishFreshSolvencyProof: published root=%s tx=%s block=%d round=%d",
+                merkleRoot[:16]+"...", proof.TxHash.Hex(), proof.BlockNumber, votingRound)
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

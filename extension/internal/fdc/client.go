@@ -236,7 +236,7 @@ const fdcHubABI = `[
                 "name": "requestAttestation",
                 "outputs": [{"name": "_attestationType", "type": "bytes32"}],
                 "stateMutability": "payable",
-                "type": "function
+                "type": "function"
         }
 ]`
 
@@ -246,7 +246,7 @@ const fdcFeeABI = `[
                 "name": "getRequestFee",
                 "outputs": [{"name": "", "type": "uint256"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         }
 ]`
 
@@ -256,7 +256,7 @@ const flareSysABI = `[
                 "name": "getCurrentVotingEpochId",
                 "outputs": [{"name": "", "type": "uint256"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         }
 ]`
 
@@ -266,7 +266,7 @@ const fdcVerifyABI = `[
                 "name": "merkleRoot",
                 "outputs": [{"name": "", "type": "bytes32"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         }
 ]`
 
@@ -579,7 +579,7 @@ func (fc *FDCClient) prepareWeb2JsonRequest(accountAddress string) ([]byte, erro
         // Build the Web2Json request for Hyperliquid API
         requestBody := map[string]interface{}{
                 "url":              "https://api.hyperliquid.xyz/info",
-                "postProcessJq":    ".[] | select(.user == \" + accountAddress + "\")",
+                "postProcessJq":    fmt.Sprintf(".[] | select(.user == \"%s\")", accountAddress),
                 "abiSignature":     "HyperliquidState(string accountAddress, uint256 totalValue, uint256 marginRatio)",
         }
 

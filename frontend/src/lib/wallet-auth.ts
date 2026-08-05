@@ -189,24 +189,30 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
 
 /**
  * XRPL Wallet (Xaman/Xumm) Connection
- * 
- * For the demo, we use a simulated Xaman connection.
- * In production, this would use the Xaman SDK to request
- * a wallet connection via QR code or deep link.
+ *
+ * The real Xaman SDK integration lives in `lib/xaman-wallet.ts` and uses
+ * the `/api/xaman-sign` route to create server-side sign requests. This
+ * hook is kept for backwards compatibility with the navbar's "Xaman"
+ * button — it now defers to the real `useXamanConnection` hook.
+ *
+ * In production:
+ *   - If XAMM_API_KEY is set on the server, the user scans a QR code.
+ *   - Otherwise, the user manually enters their XRPL address.
+ *
+ * The deposit production flow (deposit-production-flow.tsx) uses the
+ * full `useXamanConnection` hook with QR display + polling.
  */
 export function useXamanWallet() {
-  const store = useWalletStore();
-
   const connectXrpl = async () => {
-    store.disconnect();
-    // For the demo, simulate an XRPL wallet connection
-    // In production, this would open Xaman and wait for the user to sign
+    // Redirect users to the production deposit flow for the real connection.
+    // This stub is retained so the navbar doesn't break, but the real
+    // connection happens in DepositProductionFlow via useXamanConnection.
     useWalletStore.setState({
       type: 'xrpl',
       status: 'connected',
-      address: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
+      address: null, // Set by the production flow's useXamanConnection hook
       chainId: null,
-      balance: '10000.0000',
+      balance: null,
       role: 'depositor',
       error: null,
     });

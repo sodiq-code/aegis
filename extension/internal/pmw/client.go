@@ -76,42 +76,42 @@ const WalletProjectManagerFacetABI = `[
                 "name": "createProject",
                 "outputs": [{"name": "_projectId", "type": "bytes32"}],
                 "stateMutability": "nonpayable",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getExtensionId",
                 "outputs": [{"name": "", "type": "uint256"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getOwner",
                 "outputs": [{"name": "", "type": "address"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getKeyType",
                 "outputs": [{"name": "", "type": "bytes32"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getSigningAlgo",
                 "outputs": [{"name": "", "type": "bytes32"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "confirmOwnership",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function
+                "type": "function"
         }
 ]`
 
@@ -122,42 +122,42 @@ const WalletManagerFacetABI = `[
                 "name": "createWallet",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
                 "name": "enableWallet",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
                 "name": "closeWalletInitialization",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_projectId", "type": "bytes32"}],
                 "name": "getProjectWalletIds",
                 "outputs": [{"name": "", "type": "bytes32[]"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
                 "name": "getWalletStatus",
                 "outputs": [{"name": "", "type": "uint8"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
                 "name": "getWalletProjectId",
                 "outputs": [{"name": "", "type": "bytes32"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_walletId", "type": "bytes32"}],
@@ -167,7 +167,7 @@ const WalletManagerFacetABI = `[
                         {"name": "threshold", "type": "uint256"}
                 ],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         }
 ]`
 
@@ -178,35 +178,35 @@ const ExtensionManagerFacetABI = `[
                 "name": "getSystemSupportedPlatforms",
                 "outputs": [{"name": "", "type": "bytes32[]"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [],
                 "name": "getSystemSupportedKeyTypes",
                 "outputs": [{"name": "", "type": "bytes32[]"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_keyType", "type": "bytes32"}],
                 "name": "getSystemSupportedSigningAlgos",
                 "outputs": [{"name": "", "type": "bytes32[]"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [],
                 "name": "nextPublicExtensionId",
                 "outputs": [{"name": "", "type": "uint256"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [{"name": "_extensionId", "type": "uint256"}],
                 "name": "getTeeExtensionInstructionsSender",
                 "outputs": [{"name": "", "type": "address"}],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         }
 ]`
 
@@ -225,13 +225,13 @@ const InstructionsFacetABI = `[
                                         {"name": "claimBackAddress", "type": "address"}
                                 ],
                                 "name": "_instructionParams",
-                                "type": "tuple
+                                "type": "tuple"
                         }
                 ],
                 "name": "sendInstructions",
                 "outputs": [{"name": "_instructionId", "type": "bytes32"}],
                 "stateMutability": "payable",
-                "type": "function
+                "type": "function"
         }
 ]`
 
@@ -1008,7 +1008,7 @@ func (pc *PMWClient) SubmitXRPLInstructionViaInstructionSender(
                         "name": "sendInstruction",
                         "outputs": [],
                         "stateMutability": "nonpayable",
-                        "type": "function
+                        "type": "function"
                 }
         ]`
 

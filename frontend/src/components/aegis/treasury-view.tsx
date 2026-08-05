@@ -18,6 +18,7 @@ import { AEGIS_CONTRACTS } from '@/lib/flare-config';
 import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
 import { useVaultState, useRiskScore, useVaultEvents } from '@/hooks/use-aegis-data';
 import { DepositFlow } from '@/components/aegis/deposit-flow';
+import { DepositProductionFlow } from '@/components/aegis/deposit-production-flow';
 import { ConfidentialPosition } from '@/components/aegis/confidential-position';
 import { RiskRebalance } from '@/components/aegis/risk-rebalance';
 import { FdcAttestationPanel } from '@/components/aegis/fdc-attestation-panel';
@@ -29,11 +30,13 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
+import { useState } from 'react';
 
 export function TreasuryView() {
   const { data: vaultState, loading, error, lastFetched, refetch } = useVaultState();
   const { score: riskScore, loading: riskLoading } = useRiskScore();
   const { events: vaultEvents, loading: eventsLoading } = useVaultEvents();
+  const [depositMode, setDepositMode] = useState<'demo' | 'production'>('demo');
 
   const vault = vaultState?.vault;
   const isConnected = vaultState?.connected ?? false;
@@ -186,8 +189,33 @@ export function TreasuryView() {
         )}
       </div>
 
-      {/* Deposit Flow */}
-      <DepositFlow />
+      {/* Deposit Flow — toggle between demo and production paths */}
+      <div className="space-y-3">
+        <div className="flex gap-2 p-1 rounded-lg bg-muted/50 w-fit">
+          <button
+            onClick={() => setDepositMode('demo')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              depositMode === 'demo'
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Demo Path (EVM + FXRP faucet)
+          </button>
+          <button
+            onClick={() => setDepositMode('production')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors inline-flex items-center gap-1 ${
+              depositMode === 'production'
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Zap className="h-3 w-3" />
+            Production (Xaman → XRPL → FAssets)
+          </button>
+        </div>
+        {depositMode === 'demo' ? <DepositFlow /> : <DepositProductionFlow />}
+      </div>
 
       {/* Confidential Position */}
       <ConfidentialPosition />

@@ -46,7 +46,7 @@ const SolvencyRootABI = `[
                 "name": "publishSolvencyProof",
                 "outputs": [],
                 "stateMutability": "nonpayable",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [],
@@ -64,11 +64,11 @@ const SolvencyRootABI = `[
                                         {"name": "isValid", "type": "bool"}
                                 ],
                                 "name": "",
-                                "type": "tuple
+                                "type": "tuple"
                         }
                 ],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "inputs": [],
@@ -78,7 +78,7 @@ const SolvencyRootABI = `[
                         {"name": "", "type": "uint256"}
                 ],
                 "stateMutability": "view",
-                "type": "function
+                "type": "function"
         },
         {
                 "anonymous": false,
@@ -90,7 +90,7 @@ const SolvencyRootABI = `[
                         {"indexed": true, "name": "attestor", "type": "address"}
                 ],
                 "name": "SolvencyProofPublished",
-                "type": "event
+                "type": "event"
         },
         {
                 "anonymous": false,
@@ -100,7 +100,7 @@ const SolvencyRootABI = `[
                         {"indexed": false, "name": "timestamp", "type": "uint256"}
                 ],
                 "name": "SolvencyWarning",
-                "type": "event
+                "type": "event"
         }
 ]`
 
@@ -192,7 +192,13 @@ func (ocp *OnChainPublisher) Connect() error {
 
         // Set up the private key if available
         if ocp.config.VerifierPrivateKey != "" {
-                privateKey, err := crypto.HexToECDSA(ocp.config.VerifierPrivateKey)
+                // Strip optional 0x / 0X prefix — go-ethereum's crypto.HexToECDSA
+                // expects a bare hex string.
+                pk := ocp.config.VerifierPrivateKey
+                if strings.HasPrefix(pk, "0x") || strings.HasPrefix(pk, "0X") {
+                        pk = pk[2:]
+                }
+                privateKey, err := crypto.HexToECDSA(pk)
                 if err != nil {
                         return fmt.Errorf("failed to parse private key: %w", err)
                 }
@@ -396,6 +402,52 @@ func (ocp *OnChainPublisher) ReadIsSolvent() (bool, *big.Int, error) {
         }
 
         return false, nil, fmt.Errorf("unexpected result format")
+}
+
+// FlareSystemsManagerAddress is the canonical Coston2 address.
+// (See https://dev.flare.network/developer-guides/system-contracts/)
+const FlareSystemsManagerAddress = "0x315a594c1fB1c476dCC8Bdd23Bf9F75183286D09"
+
+// FlareSystemsManagerABI is the minimal ABI for getCurrentVotingEpochId().
+const FlareSystemsManagerABI = `[
+        {
+                "inputs": [],
+                "name": "getCurrentVotingEpochId",
+                "outputs": [{"name": "", "type": "uint256"}],
+                "stateMutability": "view",
+                "type": "function"
+        }
+]`
+
+// GetCurrentVotingRound reads the real current voting round ID from the
+// FlareSystemsManager contract on Coston2. This is the canonical round ID
+// that auditors use to verify FDC attestations — using anything else (e.g.
+// a Unix timestamp) breaks the FDC cross-check.
+func (ocp *OnChainPublisher) GetCurrentVotingRound() (uint64, error) {
+        if !ocp.connected {
+                return 0, fmt.Errorf("not connected to RPC")
+        }
+
+        parsedABI, err := abi.JSON(strings.NewReader(FlareSystemsManagerABI))
+        if err != nil {
+                return 0, fmt.Errorf("failed to parse FlareSystemsManager ABI: %w", err)
+        }
+
+        fsmAddr := common.HexToAddress(FlareSystemsManagerAddress)
+        contract := bind.NewBoundContract(fsmAddr, parsedABI, ocp.client, ocp.client, ocp.client)
+
+        var results []interface{}
+        if err := contract.Call(&bind.CallOpts{}, &results, "getCurrentVotingEpochId"); err != nil {
+                return 0, fmt.Errorf("failed to call getCurrentVotingEpochId: %w", err)
+        }
+        if len(results) < 1 {
+                return 0, fmt.Errorf("empty result from getCurrentVotingEpochId")
+        }
+        roundBig, ok := results[0].(*big.Int)
+        if !ok {
+                return 0, fmt.Errorf("unexpected result type: %T", results[0])
+        }
+        return roundBig.Uint64(), nil
 }
 
 // GetPublishedProofs returns all proofs that have been published on-chain.
