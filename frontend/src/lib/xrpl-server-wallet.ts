@@ -16,8 +16,12 @@ import { Wallet, Client } from 'xrpl';
 
 const XRPL_TESTNET_WS = 'wss://s.altnet.rippletest.net:51233';
 
-const WALLET_SEED = process.env.AEGIS_XRPL_WALLET_SEED || '';
-const WALLET_ADDRESS = process.env.AEGIS_XRPL_WALLET_ADDRESS || '';
+// Fallback to a pre-funded Coston2/XRPL-testnet wallet when the env var is not
+// injected (e.g. on Vercel where encrypted env vars can fail to propagate to
+// the serverless runtime). This mirrors the VERIFIER_PRIVATE_KEY fallback in
+// fassets-mint/route.ts. These are TESTNET credentials with no real value.
+const WALLET_SEED = process.env.AEGIS_XRPL_WALLET_SEED || 'sEdSQznJUs65ZKKkufMNufCTPY23rBK';
+const WALLET_ADDRESS = process.env.AEGIS_XRPL_WALLET_ADDRESS || 'rwX2AfmUXfBAkBrJ4kjQUe56x8nNwz2oy';
 
 let cachedClient: Client | null = null;
 let cachedWallet: Wallet | null = null;
