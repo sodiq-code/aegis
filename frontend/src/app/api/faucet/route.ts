@@ -19,8 +19,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFlareConfig, AEGIS_CONTRACTS, FLARE_SYSTEM_CONTRACTS } from '@/lib/flare-config';
 
-const FAUCET_AMOUNT = 5_000_000n; // 5 FXRP (6 decimals)
-const MINIMUM_REMAINING_FOR_VERIFIER = 1_000_000n; // Keep at least 1 FXRP for verifier
+const FAUCET_AMOUNT = BigInt(5_000_000); // 5 FXRP (6 decimals)
+const MINIMUM_REMAINING_FOR_VERIFIER = BigInt(1_000_000); // Keep at least 1 FXRP for verifier
 
 export async function POST(request: NextRequest) {
   try {
