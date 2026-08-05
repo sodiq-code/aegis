@@ -166,6 +166,64 @@ npm install && npm run dev
 
 The dashboard is also hosted live at **https://aegis-mantle-deploy-s-projects.vercel.app**.
 
+### Running the FCC extension TEE as a real daemon
+
+The Go extension's `OnChainPublisher` is wired to publish real solvency proofs
+to the `SolvencyRoot` contract on Coston2. To run the real TEE (instead of
+the dashboard's verifier-key signed publishes which stand in for the TEE
+during the demo):
+
+```bash
+# From the aegis-rewrite root
+export AEGIS_VERIFIER_PRIVATE_KEY=0x...   # the verifier key (has VERIFIER role)
+export AEGIS_SOLVENCY_ROOT_ADDRESS=0xf52c1fd632d853ee46a48a82064d3f5d390f057d
+export AEGIS_VAULT_CORE_ADDRESS=0xcb08be1cc86d3f94c54c64682372e32f669134bc
+export AEGIS_RPC_URL=https://coston2-api.flare.network/ext/C/rpc
+
+cd extension && go build -o ./bin/aegis-extension ./cmd/main.go
+./bin/aegis-extension
+```
+
+Or use the included start script: `./mini-services/aegis-tee/start.sh`
+
+When running, the TEE daemon:
+- Polls `VaultCore.DepositMade` events every 15 seconds (chunked for Coston2's
+  30-block `eth_getLogs` limit)
+- Feeds each new deposit into the `PositionComputer` (builds the Merkle tree)
+- Computes a fresh Merkle root and publishes it on-chain via
+  `SolvencyRoot.publishSolvencyProof()` signed by the verifier key
+- Reads the real voting round from `FlareSystemsManager.getCurrentVotingEpochId()`
+  (so the auditor's FDC cross-check works)
+- Runs the `RiskAgent` loop (90-second interval) with the XGBoost model
+- Maintains the `SafeStateManager` (NORMAL / SAFE / EMERGENCY modes)
+
+### Production deposit path (XRPL → FAssets → VaultCore)
+
+The dashboard supports two deposit paths, toggled in the Treasury view:
+
+1. **Demo Path** (default): EVM + FXRP faucet — the user connects MetaMask,
+   the faucet drips 5 FXRP, the user signs `approve` + `depositFXRP` via
+   MetaMask. Used for quick demos without XRPL testnet funds.
+
+2. **Production Path**: Xaman → XRPL → FAssets → VaultCore — the user:
+   - Connects Xaman (real QR code if `XAMM_API_KEY` is set on the server,
+     otherwise manual XRPL address entry)
+   - Connects MetaMask (the FXRP recipient EVM address)
+   - Sends an XRPL Payment to the FAssets Core Vault
+     (`rDhpmiPq4BVBDWMVdSrmkgt8thKyRzGV1p` on Coston2) with a 32-byte memo
+     encoding the EVM recipient address
+   - Pastes the XRPL tx hash
+   - The server orchestrates: verify XRPL payment → prepare FDC attestation
+     → submit to FdcHub → poll `Relay.isFinalized(200, round)` → fetch DA
+     Layer proof → call `AssetManagerFXRP.executeDirectMinting(proof)`
+   - The user signs `approve` + `depositFXRP` via MetaMask
+   - The TEE daemon picks up the `DepositMade` event and publishes a fresh
+     solvency root within 15 seconds
+
+The production path takes ~3-5 minutes end-to-end (mostly FDC finalization).
+The `/api/fassets-mint?info=true` endpoint returns the live Core Vault address,
+fee schedule, and memo format from the on-chain `AssetManagerFXRP` contract.
+
 ---
 
 ## TypeScript SDK
