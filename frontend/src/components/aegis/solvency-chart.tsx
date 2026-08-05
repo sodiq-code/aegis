@@ -24,18 +24,48 @@ import {
 } from 'recharts';
 
 // Generate risk score trend data
-// In production this would come from historical risk score API
-function generateRiskTrend(currentScore: number): Array<{ time: string; score: number }> {
+// Uses the real current risk score and the historical solvency proofs to
+// derive a plausible trend. Each historical proof's collateral ratio implies
+// a risk score via the same linear model the /api/risk-agent uses.
+function generateRiskTrend(
+  currentScore: number,
+  proofs: Array<{ collateralRatio: number; timestamp: number; blockNumber: number; surplusBps?: number; minRatio?: number }> = [],
+): Array<{ time: string; score: number }> {
+  // If we have real proof history, derive a risk score for each
+  if (proofs.length > 0) {
+    const points: Array<{ time: string; score: number }> = [];
+    const sorted = [...proofs].sort((a, b) => a.timestamp - b.timestamp);
+    for (const p of sorted) {
+      const ratio = p.collateralRatio;
+      const minRatio = p.minRatio ?? 15000;
+      // Same heuristic as use-vault-data.ts fallback
+      let score: number;
+      if (ratio >= 20000) score = 5;
+      else if (ratio >= 15000) score = 25 + (20000 - ratio) * 0.0004;
+      else if (ratio >= 12000) score = 37 + (15000 - ratio) * 0.00077;
+      else score = 60 + Math.max(0, 12000 - ratio) * 0.000175;
+      score = Math.min(100, Math.max(0, score));
+      const time = p.timestamp > 0
+        ? new Date(p.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : `Blk ${(p.blockNumber ?? 0).toString().slice(-4)}`;
+      points.push({ time, score: Math.round(score * 100) / 100 });
+    }
+    // Add the current live score as the final point
+    points.push({
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      score: Math.round(currentScore * 100) / 100,
+    });
+    return points;
+  }
+
+  // No proofs available — return a flat line at the current score
+  // (better than fake Math.sin data — at least it's honest)
   const points: Array<{ time: string; score: number }> = [];
   const now = new Date();
-  // Generate 24 data points over the last 24 hours
   for (let i = 23; i >= 0; i--) {
     const time = new Date(now.getTime() - i * 3600000);
     const label = `${time.getHours().toString().padStart(2, '0')}:00`;
-    // Simulate historical scores with some variance
-    const variance = (Math.sin(i * 0.5) * 3) + (Math.random() * 2 - 1);
-    const score = i === 0 ? currentScore : Math.max(0, Math.min(100, currentScore + variance * (i / 5)));
-    points.push({ time: label, score: Math.round(score * 100) / 100 });
+    points.push({ time: label, score: Math.round(currentScore * 100) / 100 });
   }
   return points;
 }
@@ -45,16 +75,8 @@ function generateSolvencyHistory(
   proofs: Array<{ collateralRatio: number; timestamp: number; blockNumber: number }>
 ): Array<{ label: string; ratio: number; min: number }> {
   if (proofs.length === 0) {
-    // Generate synthetic data for the demo
-    const points: Array<{ label: string; ratio: number; min: number }> = [];
-    const now = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const time = new Date(now.getTime() - i * 7200000);
-      const label = `${time.getHours().toString().padStart(2, '0')}:00`;
-      const baseRatio = 140 + (Math.random() * 30 - 10);
-      points.push({ label, ratio: Math.round(baseRatio * 10) / 10, min: 150 });
-    }
-    return points;
+    // No proofs — return empty (chart will show "no data" message)
+    return [];
   }
 
   return proofs.slice(0, 12).reverse().map(proof => {
@@ -109,8 +131,8 @@ export function SolvencyChart() {
   const { proofs, loading: proofsLoading } = useSolvencyProofs();
 
   const riskTrendData = useMemo(
-    () => generateRiskTrend(riskScore ?? 7.52),
-    [riskScore]
+    () => generateRiskTrend(riskScore ?? 7.52, proofs),
+    [riskScore, proofs]
   );
 
   const solvencyHistoryData = useMemo(

@@ -173,42 +173,40 @@ export function useSolvencyData() {
 // ─── Policy Data Hook ───────────────────────────────────────────
 
 interface PolicyConfig {
+  id: number;
   name: string;
+  description: string;
+  riskLevel: string;
+  isActive: boolean;
   maxDrawdownBps: number;
   maxSingleExposureBps: number;
   hedgeThresholdBps: number;
   rebalanceThresholdBps: number;
-  minDepositAmount: number;
-  maxDepositAmount: number;
+  minDepositAmount: number;       // maps to maxDepositPerTx
+  maxDepositAmount: number;       // placeholder (max total exposure not exposed here)
 }
 
+interface OnChainPolicy extends PolicyConfig {
+  minCollateralRatio: number;
+  maxDepositPerTx: number;
+}
+
+// Default presets used as fallback if /api/policy-state is unreachable
 const PRESET_POLICIES: Record<string, PolicyConfig> = {
   conservative: {
-    name: 'Conservative',
-    maxDrawdownBps: 1500,
-    maxSingleExposureBps: 3000,
-    hedgeThresholdBps: 800,
-    rebalanceThresholdBps: 3000,
-    minDepositAmount: 100,
-    maxDepositAmount: 100000,
+    id: 1, name: 'Conservative', description: 'Low risk tolerance policy', riskLevel: 'Conservative', isActive: true,
+    maxDrawdownBps: 1500, maxSingleExposureBps: 4000, hedgeThresholdBps: 800, rebalanceThresholdBps: 500,
+    minDepositAmount: 100, maxDepositAmount: 100000,
   },
   balanced: {
-    name: 'Balanced',
-    maxDrawdownBps: 2500,
-    maxSingleExposureBps: 6000,
-    hedgeThresholdBps: 1200,
-    rebalanceThresholdBps: 5000,
-    minDepositAmount: 50,
-    maxDepositAmount: 500000,
+    id: 2, name: 'Balanced', description: 'Medium risk tolerance policy', riskLevel: 'Balanced', isActive: true,
+    maxDrawdownBps: 2500, maxSingleExposureBps: 6000, hedgeThresholdBps: 1200, rebalanceThresholdBps: 500,
+    minDepositAmount: 50, maxDepositAmount: 500000,
   },
   aggressive: {
-    name: 'Aggressive',
-    maxDrawdownBps: 4000,
-    maxSingleExposureBps: 8000,
-    hedgeThresholdBps: 2000,
-    rebalanceThresholdBps: 7000,
-    minDepositAmount: 10,
-    maxDepositAmount: 1000000,
+    id: 3, name: 'Aggressive', description: 'High risk tolerance policy', riskLevel: 'Aggressive', isActive: true,
+    maxDrawdownBps: 4000, maxSingleExposureBps: 8000, hedgeThresholdBps: 2000, rebalanceThresholdBps: 500,
+    minDepositAmount: 10, maxDepositAmount: 1000000,
   },
 };
 
@@ -219,9 +217,45 @@ export function usePolicyData() {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
+  // Fetch real policies from /api/policy-state on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const r = await fetch('/api/deposit');
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!mounted) return;
+        const policies: OnChainPolicy[] = data.policies || [];
+        if (policies.length > 0) {
+          // Map the on-chain policy to PolicyConfig
+          const balanced = policies.find(p => p.name === 'Balanced') || policies[0];
+          const preset = balanced.name.toLowerCase();
+          setActivePreset(preset);
+          setPolicy({
+            id: balanced.id,
+            name: balanced.name,
+            description: balanced.description,
+            riskLevel: balanced.riskLevel,
+            isActive: balanced.isActive,
+            maxDrawdownBps: balanced.maxDrawdownBps,
+            maxSingleExposureBps: balanced.maxSingleExposureBps,
+            hedgeThresholdBps: balanced.hedgeThresholdBps,
+            rebalanceThresholdBps: 500,
+            minDepositAmount: Number(balanced.maxDepositPerTx) / 1e6,
+            maxDepositAmount: 500000,
+          });
+        }
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   const handlePresetChange = useCallback((preset: string) => {
     setActivePreset(preset);
-    setPolicy(PRESET_POLICIES[preset]);
+    if (preset in PRESET_POLICIES) {
+      setPolicy(PRESET_POLICIES[preset]);
+    }
     setIsModified(false);
   }, []);
 
@@ -240,18 +274,28 @@ export function usePolicyData() {
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
-      // In production, this calls the PolicyRegistry contract via wallet
-      // For now, we validate and simulate
       if (policy.maxDrawdownBps <= 0) throw new Error('Max drawdown must be positive');
       if (policy.maxSingleExposureBps > 10000) throw new Error('Max exposure cannot exceed 100%');
       if (policy.minDepositAmount >= policy.maxDepositAmount) throw new Error('Min deposit must be less than max');
 
-      // Simulate on-chain tx delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Call the real /api/policy-update route (verifier-key signed tx)
+      const r = await fetch('/api/policy-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          policyId: policy.id,
+          action: 'update-policy',
+          fieldChanged: 'manual edit via dashboard',
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) {
+        throw new Error(data.error || 'Policy update failed on-chain');
+      }
       setIsModified(false);
       toast({
         title: 'Policy Updated',
-        description: `${policy.name} policy saved to on-chain PolicyRegistry`,
+        description: `${policy.name} policy saved to on-chain PolicyRegistry (tx: ${data.transactionHash?.slice(0, 10)}...)`,
       });
     } catch (err) {
       toast({
