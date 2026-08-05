@@ -291,19 +291,71 @@ async function executeDirectMinting(
   const provider = new ethers.JsonRpcProvider(config.rpcUrl);
   const wallet = new ethers.Wallet(VERIFIER_PRIVATE_KEY, provider);
 
-  // The IXRPPayment.Proof struct + Response struct ABI.
-  // Response: { bytes32 attestationType; bytes32 sourceId; uint64 votingRound;
-  //             uint64 lowestUsedTimestamp; RequestBody requestBody; ResponseBody responseBody; }
-  // RequestBody:  { bytes32 transactionId; address proofOwner; }
-  // ResponseBody: { uint64 blockNumber; uint64 blockTimestamp; string sourceAddress;
-  //                  bytes32 sourceAddressHash; bytes32 receivingAddressHash;
-  //                  bytes32 intendedReceivingAddressHash; int256 spentAmount;
-  //                  int256 intendedSpentAmount; int256 receivedAmount;
-  //                  int256 intendedReceivedAmount; bool hasMemoData; bytes firstMemoData;
-  //                  bool hasDestinationTag; uint256 destinationTag; uint8 status; }
-  // Proof: { bytes32[] merkleProof; Response data; }
+  // The IXRPPayment.Proof struct + Response struct ABI in JSON format
+  // (human-readable tuple syntax doesn't parse reliably for deep nesting)
   const abi = [
-    `function executeDirectMinting(((bytes32[],(bytes32,bytes32,uint64,uint64,(bytes32,address),(uint64,uint64,string,bytes32,bytes32,bytes32,int256,int256,int256,int256,bool,bytes,bool,uint256,uint8)))) external payable`,
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "bytes32[]",
+              "name": "merkleProof",
+              "type": "bytes32[]"
+            },
+            {
+              "components": [
+                { "internalType": "bytes32", "name": "attestationType", "type": "bytes32" },
+                { "internalType": "bytes32", "name": "sourceId", "type": "bytes32" },
+                { "internalType": "uint64", "name": "votingRound", "type": "uint64" },
+                { "internalType": "uint64", "name": "lowestUsedTimestamp", "type": "uint64" },
+                {
+                  "components": [
+                    { "internalType": "bytes32", "name": "transactionId", "type": "bytes32" },
+                    { "internalType": "address", "name": "proofOwner", "type": "address" }
+                  ],
+                  "internalType": "struct IXRPPayment.RequestBody",
+                  "name": "requestBody",
+                  "type": "tuple"
+                },
+                {
+                  "components": [
+                    { "internalType": "uint64", "name": "blockNumber", "type": "uint64" },
+                    { "internalType": "uint64", "name": "blockTimestamp", "type": "uint64" },
+                    { "internalType": "string", "name": "sourceAddress", "type": "string" },
+                    { "internalType": "bytes32", "name": "sourceAddressHash", "type": "bytes32" },
+                    { "internalType": "bytes32", "name": "receivingAddressHash", "type": "bytes32" },
+                    { "internalType": "bytes32", "name": "intendedReceivingAddressHash", "type": "bytes32" },
+                    { "internalType": "int256", "name": "spentAmount", "type": "int256" },
+                    { "internalType": "int256", "name": "intendedSpentAmount", "type": "int256" },
+                    { "internalType": "int256", "name": "receivedAmount", "type": "int256" },
+                    { "internalType": "int256", "name": "intendedReceivedAmount", "type": "int256" },
+                    { "internalType": "bool", "name": "hasMemoData", "type": "bool" },
+                    { "internalType": "bytes", "name": "firstMemoData", "type": "bytes" },
+                    { "internalType": "bool", "name": "hasDestinationTag", "type": "bool" },
+                    { "internalType": "uint256", "name": "destinationTag", "type": "uint256" },
+                    { "internalType": "uint8", "name": "status", "type": "uint8" }
+                  ],
+                  "internalType": "struct IXRPPayment.ResponseBody",
+                  "name": "responseBody",
+                  "type": "tuple"
+                }
+              ],
+              "internalType": "struct IXRPPayment.Response",
+              "name": "data",
+              "type": "tuple"
+            }
+          ],
+          "internalType": "struct IXRPPayment.Proof",
+          "name": "_proof",
+          "type": "tuple"
+        }
+      ],
+      "name": "executeDirectMinting",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    }
   ];
   const assetManager = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.AssetManagerFXRP, abi, wallet);
 
