@@ -437,36 +437,48 @@ async function executeDirectMinting(provider, merkleProof, response) {
     wallet
   );
 
-  // Build the Response struct exactly as the fassets-mint route does.
+  // Build the Response struct as a PLAIN ARRAY (not a named object) because
+  // the ABI uses unnamed tuple components. Ethers.js cannot map named object
+  // properties to unnamed components — it throws "cannot use object value
+  // with unnamed components".
+  // Response layout (must match the ABI exactly):
+  //   (bytes32 attestationType, bytes32 sourceId, uint64 votingRound,
+  //    uint64 lowestUsedTimestamp,
+  //    (bytes32 transactionId, address proofOwner) requestBody,
+  //    (uint64 blockNumber, uint64 blockTimestamp, string sourceAddress,
+  //     bytes32 sourceAddressHash, bytes32 receivingAddressHash,
+  //     bytes32 intendedReceivingAddressHash, int256 spentAmount,
+  //     int256 intendedSpentAmount, int256 receivedAmount,
+  //     int256 intendedReceivedAmount, bool hasMemoData, bytes firstMemoData,
+  //     bool hasDestinationTag, uint256 destinationTag, uint8 status) responseBody)
   const rb = response.requestBody || {};
   const rb2 = response.responseBody || {};
-  const responseData = {
-    attestationType: response.attestationType,
-    sourceId: response.sourceId,
-    votingRound: response.votingRound,
-    lowestUsedTimestamp: response.lowestUsedTimestamp,
-    requestBody: {
-      transactionId: rb.transactionId,
-      proofOwner: rb.proofOwner,
-    },
-    responseBody: {
-      blockNumber: rb2.blockNumber,
-      blockTimestamp: rb2.blockTimestamp,
-      sourceAddress: rb2.sourceAddress,
-      sourceAddressHash: rb2.sourceAddressHash,
-      receivingAddressHash: rb2.receivingAddressHash,
-      intendedReceivingAddressHash: rb2.intendedReceivingAddressHash,
-      spentAmount: rb2.spentAmount,
-      intendedSpentAmount: rb2.intendedSpentAmount,
-      receivedAmount: rb2.receivedAmount,
-      intendedReceivedAmount: rb2.intendedReceivedAmount,
-      hasMemoData: rb2.hasMemoData,
-      firstMemoData: rb2.firstMemoData,
-      hasDestinationTag: rb2.hasDestinationTag,
-      destinationTag: rb2.destinationTag,
-      status: rb2.status,
-    },
-  };
+  const requestBodyArr = [rb.transactionId, rb.proofOwner];
+  const responseBodyArr = [
+    rb2.blockNumber,
+    rb2.blockTimestamp,
+    rb2.sourceAddress,
+    rb2.sourceAddressHash,
+    rb2.receivingAddressHash,
+    rb2.intendedReceivingAddressHash,
+    rb2.spentAmount,
+    rb2.intendedSpentAmount,
+    rb2.receivedAmount,
+    rb2.intendedReceivedAmount,
+    rb2.hasMemoData,
+    rb2.firstMemoData,
+    rb2.hasDestinationTag,
+    rb2.destinationTag,
+    rb2.status,
+  ];
+  const responseData = [
+    response.attestationType,
+    response.sourceId,
+    response.votingRound,
+    response.lowestUsedTimestamp,
+    requestBodyArr,
+    responseBodyArr,
+  ];
 
   const proofStruct = [merkleProof, responseData];
 
