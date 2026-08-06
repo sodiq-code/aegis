@@ -13,7 +13,7 @@
 
 ---
 
-> Aegis is a treasury protocol for XRP-native institutions on Flare. An AI risk agent runs inside a Flare TEE and publishes a verifiable solvency proof, so an auditor can confirm a treasury is solvent without seeing individual positions.
+> Institutional XRP treasuries are forming now — and they need a way to hold, hedge, and prove solvency without exposing positions. Aegis is the only product that makes this possible, by running an AI risk agent inside a Flare TEE and publishing a verifiable solvency proof — so an auditor can confirm a treasury is solvent **without ever seeing a single position**.
 
 ---
 
