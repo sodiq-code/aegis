@@ -44,6 +44,6 @@ If you discover a security vulnerability, please report it privately by opening 
 
 ## Audit Status
 
-- **Current**: Internal review, Foundry fuzz tests (295 tests, 0 failures)
+- **Current**: Internal review, Foundry fuzz tests (358 tests, 0 failures)
 - **Planned**: External audit (target: Trail of Bits or equivalent) prior to Mainnet launch
 - **Deployment verification**: Automated verification script reports all checks green; every contract has non-zero code on Coston2

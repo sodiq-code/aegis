@@ -32,7 +32,7 @@ cp .env.example .env
 # Build contracts
 forge build
 
-# Run tests (295 tests, 0 failures)
+# Run tests (358 tests, 0 failures)
 forge test -vvv
 
 # Deploy to Coston2
@@ -238,14 +238,14 @@ After deployment, verify each item using the commands shown:
 - [ ] **PolicyRegistry has 3 policies** -- `cast call 0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5 "getPolicyCount()" --rpc-url coston2` should return 3
 - [ ] **SolvencyRoot isSolvent() works** -- `cast call 0xf52c1fd632d853ee46a48a82064d3f5d390f057d "isSolvent()" --rpc-url coston2` currently returns (true, 16666)
 - [ ] **InstructionSender has instructions** -- `cast call 0xb175f16e1cea66360e354db4b178c04c69363c06 "getInstructionCount()" --rpc-url coston2` should return >= 1
-- [ ] **FDCAttestor gets voting round** -- `cast call 0x266a9537eaa76264c926541a77c2705f659ba4f1 "getCurrentVotingRound()" --rpc-url coston2` should return ~1415258
+- [ ] **FDCAttestor gets voting round** -- `cast call 0x266a9537eaa76264c926541a77c2705f659ba4f1 "getCurrentVotingRound()" --rpc-url coston2` should return ~1417821
 - [ ] **PMWInstructionRelay is accessible** -- `cast call 0xce23e1a26c41eaa305f69d9150d9ac82d8b30743 "getActionCount()" --rpc-url coston2`
 - [ ] **FTSO V2 returns XRP/USD price ~$1.07** -- Use `vault.getXrpUsdPrice()` via SDK or cast
 - [ ] **All 8 system contracts reachable** -- Verify FtsoV2, FdcHub, FdcVerification, FdcRequestFeeConfigs, FlareSystemsManager, FlareTeeManager, Fdc2Hub, Fdc2Verification
 - [ ] **FCC extension health endpoint returns 200** -- `curl http://localhost:8080/info`
 - [ ] **Frontend dashboard loads** -- Visit http://localhost:3000 (or https://aegis.vercel.app)
 - [ ] **All 3 views display live on-chain data** -- Treasury, Policy, Audit views
-- [ ] **Foundry tests pass** -- `forge test --summary` should show 295 tests, 0 failures
+- [ ] **Foundry tests pass** -- `forge test --summary` should show 358 tests, 0 failures
 - [ ] **Go tests pass** -- `go test ./...` should show 13 packages passing
 - [ ] **Deployment verification script passes** -- `bash scripts/verify-aegis.sh` should report all checks green
 

@@ -484,8 +484,8 @@ Returns the current extension state including vault count, total deposits, and t
     "totalDeposits": "1000000000000000000",
     "lastSolvencyRoot": "0x...",
     "riskScore": 50,
-    "collateralRatio": 14000,
-    "lastVotingRound": 1415258
+    "collateralRatio": 16666,
+    "lastVotingRound": 1417821
   }
 }
 ```
@@ -590,7 +590,7 @@ console.log(`Collateral Ratio: ${proof.collateralRatio}%`);
 
 // Check solvency
 const { isSolvent, collateralRatio } = await audit.isSolvent();
-// Currently returns: isSolvent=false, collateralRatio=14000 (140%)
+// Currently returns: isSolvent=true, collateralRatio=16666 (~166%)
 
 // Verify proof on-chain
 const result = await audit.verifyProof(proof.merkleRoot);
