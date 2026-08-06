@@ -10,15 +10,14 @@
 
 import { useWalletStore } from '@/lib/wallet-auth';
 import { cn } from '@/lib/utils';
-import { FLARE_CONFIG, AEGIS_CONTRACTS } from '@/lib/flare-config';
-import { Landmark, Shield, FileCheck, Activity, ExternalLink, Link2 } from 'lucide-react';
+import { FLARE_CONFIG } from '@/lib/flare-config';
+import { Landmark, Shield, FileCheck, Activity, ExternalLink } from 'lucide-react';
 import {
   Tooltip as UiTooltip,
   TooltipContent as UiTooltipContent,
   TooltipProvider as UiTooltipProvider,
   TooltipTrigger as UiTooltipTrigger,
 } from '@/components/ui/tooltip';
-import { BlockExplorerLink } from '@/components/aegis/block-explorer-link';
 
 export type AegisView = 'treasury' | 'policy' | 'audit';
 
@@ -113,26 +112,6 @@ export function AegisSidebar({ activeView, onViewChange }: SidebarProps) {
             })}
           </div>
         </UiTooltipProvider>
-
-        {/* On-Chain Contracts */}
-        <div className="mt-6 pt-4 border-t">
-          <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-            <Link2 className="h-3 w-3" />
-            On-Chain Contracts
-          </p>
-          <div className="space-y-1.5">
-            {[
-              { name: 'VaultCore', address: AEGIS_CONTRACTS.VaultCore },
-              { name: 'SolvencyRoot', address: AEGIS_CONTRACTS.SolvencyRoot },
-              { name: 'PolicyRegistry', address: AEGIS_CONTRACTS.PolicyRegistry },
-            ].map(({ name, address }) => (
-              <div key={name} className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">{name}</span>
-                <BlockExplorerLink type="address" value={address} truncate={true} />
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Connection Status */}
