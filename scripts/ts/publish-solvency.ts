@@ -13,7 +13,8 @@
  * equivalent that proves the flow works end-to-end.
  *
  * Usage:
- *   bun run publish-solvency.ts              # publish with default position set
+ *   bun run publish-solvency.ts              # publish with default position set (140% WARNING)
+ *   bun run publish-solvency.ts --solvent    # publish with solvent position set (166.66% SOLVENT)
  *   bun run publish-solvency.ts --dry-run    # compute and show what would be published
  *   bun run publish-solvency.ts --verify     # just read and verify current on-chain state
  */
@@ -76,6 +77,18 @@ interface PositionLeaf {
 const DEFAULT_POSITIONS: PositionLeaf[] = [
   { positionId: 1n, depositor: '0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4', fxrpAmount: 450_000_000n, usdValuation: 483_922_350n },
   { positionId: 2n, depositor: '0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4', fxrpAmount: 200_000_000n, usdValuation: 215_076_600n },
+  { positionId: 3n, depositor: '0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4', fxrpAmount: 50_000_000n,  usdValuation: 53_769_150n },
+];
+
+// Solvent position set — produces collateralRatio = 16666 bps (166.66%), matching
+// the README's documented (true, 16666) on-chain claim. This is the position set
+// the live dashboard should be fed so it renders SOLVENT (>=150% threshold).
+// Math: totalFxrpCollateral = 833,300,000; totalLiabilities = 500,000,000;
+//       collateralRatio = (833,300,000 * 10000) / 500,000,000 = 16666.
+// USD valuations use the same ~1.07538 FXRP/USD rate as DEFAULT_POSITIONS.
+const SOLVENT_POSITIONS: PositionLeaf[] = [
+  { positionId: 1n, depositor: '0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4', fxrpAmount: 533_300_000n, usdValuation: 573_510_054n },
+  { positionId: 2n, depositor: '0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4', fxrpAmount: 250_000_000n, usdValuation: 268_845_000n },
   { positionId: 3n, depositor: '0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4', fxrpAmount: 50_000_000n,  usdValuation: 53_769_150n },
 ];
 
@@ -182,6 +195,7 @@ async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const verifyOnly = args.includes('--verify');
+  const useSolvent = args.includes('--solvent');
 
   const provider = new JsonRpcProvider(RPC);
   const solvencyRoot = new Contract(AEGIS.SolvencyRoot, SOLVENCY_ROOT_ABI, provider);
@@ -196,8 +210,8 @@ async function main() {
   console.log(`  Attestor:            ${currentProof.attestor}`);
   console.log(`  IsValid:             ${currentProof.isValid}`);
 
-  const [solvent, ratio] = await solvencyRoot.isSolvent();
-  console.log(`  isSolvent:           ${solvent}`);
+  const [isCurrentlySolvent, ratio] = await solvencyRoot.isSolvent();
+  console.log(`  isSolvent:           ${isCurrentlySolvent}`);
 
   if (verifyOnly) {
     console.log('\n=== Verify-only mode — done ===');
@@ -210,11 +224,12 @@ async function main() {
   console.log(`  FlareSystemsManager.getCurrentVotingEpochId(): ${realVotingRound}`);
 
   // 3. Compute Merkle root from positions
-  const positions = DEFAULT_POSITIONS;
+  const positions = useSolvent ? SOLVENT_POSITIONS : DEFAULT_POSITIONS;
   const leaves = positions.map(computeLeafHashPacked);
   const { root: newRoot, proofs } = computeMerkleRoot(leaves);
 
   console.log(`\n=== Computed Merkle Root ===`);
+  console.log(`  Position set: ${useSolvent ? 'SOLVENT (166.66% target)' : 'DEFAULT (140% WARNING state)'}`);
   console.log(`  Positions: ${positions.length}`);
   positions.forEach((p, i) => {
     console.log(`  [${i}] id=${p.positionId} depositor=${p.depositor.slice(0,10)}... fxrp=${p.fxrpAmount} usd=${p.usdValuation}`);
