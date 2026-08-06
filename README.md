@@ -6,7 +6,7 @@
 
 [![Flare](https://img.shields.io/badge/Flare-Coston2-ff4d2e?style=flat-square&logo=flare)](https://flare.network)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
-[![Foundry Tests](https://img.shields.io/badge/Foundry-143%20passing-success?style=flat-square)](./contracts)
+[![Foundry Tests](https://img.shields.io/badge/Foundry-295%20passing-success?style=flat-square)](./contracts)
 [![Live Dashboard](https://img.shields.io/badge/Dashboard-Live-brightgreen?style=flat-square)](https://aegis-mantle-deploy-s-projects.vercel.app)
 
 </div>
@@ -116,14 +116,14 @@ The vault is live on Coston2 in the state below — any value can be re-checked 
 |---|---|
 | Network | Flare Coston2 (chain ID `114`) |
 | XRP/USD price (FTSO V2) | ~$1.07, refreshed every ~90s |
-| Collateral ratio | 140% (14,000 bps) |
+| Collateral ratio | ~166% (16,666 bps) |
 | Minimum threshold | 150% (15,000 bps) |
-| Solvency status | **WARNING** — `isSolvent()` returns `(false, 14000)` |
+| Solvency status | **SOLVENT** — `isSolvent()` returns `(true, 16666)` |
 | Policy count | 3 — Conservative · Balanced · Aggressive |
 | Instruction count | 13 |
-| Current voting round | ~1,415,258 |
+| Current voting round | ~1,417,821 |
 
-The WARNING state is intentional for the demo: it exercises the audit-verification flow in which an auditor verifies the on-chain WARNING condition **without seeing any individual positions**.
+The vault moved above the 150% solvency threshold after real FXRP deposits were made through the production deposit path during Phase 2 testing. The ratio fluctuates with the FTSO V2 XRP/USD price feed (refreshed every ~90s); an auditor can re-verify the current state at any time using the `cast` commands below — **without seeing any individual positions**.
 
 ---
 
@@ -166,6 +166,13 @@ npm install && npm run dev
 
 The dashboard is also hosted live at **https://aegis-mantle-deploy-s-projects.vercel.app**.
 
+> **Tip:** For local development, the quickest way to run the real on-chain
+> solvency publisher is the included TEE daemon script:
+> `./mini-services/aegis-tee/start.sh` (see
+> [Running the FCC extension TEE as a real daemon](#running-the-fcc-extension-tee-as-a-real-daemon)
+> below for full details). This publishes real `SolvencyRoot` proofs on Coston2
+> without needing the full Docker Compose stack.
+
 ### Running the FCC extension TEE as a real daemon
 
 The Go extension's `OnChainPublisher` is wired to publish real solvency proofs
@@ -205,24 +212,46 @@ The dashboard supports two deposit paths, toggled in the Treasury view:
    the faucet drips 5 FXRP, the user signs `approve` + `depositFXRP` via
    MetaMask. Used for quick demos without XRPL testnet funds.
 
-2. **Production Path**: Xaman → XRPL → FAssets → VaultCore — the user:
-   - Connects Xaman (real QR code if `XAMM_API_KEY` is set on the server,
-     otherwise manual XRPL address entry)
-   - Connects MetaMask (the FXRP recipient EVM address)
-   - Sends an XRPL Payment to the FAssets Core Vault
-     (`rDhpmiPq4BVBDWMVdSrmkgt8thKyRzGV1p` on Coston2) with a 32-byte memo
-     encoding the EVM recipient address
-   - Pastes the XRPL tx hash
-   - The server orchestrates: verify XRPL payment → prepare FDC attestation
-     → submit to FdcHub → poll `Relay.isFinalized(200, round)` → fetch DA
-     Layer proof → call `AssetManagerFXRP.executeDirectMinting(proof)`
+2. **Production Path**: server-assisted auto-send — XRPL → FAssets → VaultCore.
+   The user only needs MetaMask (the FXRP recipient EVM address). **No Xaman
+   app, no manual XRPL payment, no tx-hash pasting.** The server handles the
+   entire XRPL → FDC → FAssets pipeline:
+   - The user connects MetaMask on Coston2 (the FXRP recipient)
+   - The user enters an XRP amount and selects a risk policy
+   - On "Start FAssets Mint", the server:
+     1. Sends an XRPL Payment from a pre-funded server-side testnet wallet
+        to the FAssets Core Vault (`rDhpmiPq4BVBDWMVdSrmkgt8thKyRzGV1p` on
+        Coston2) with a 32-byte memo encoding the EVM recipient address
+     2. Verifies the payment on XRPL testnet
+     3. Prepares an FDC `XRPPayment` attestation via the verifier API
+     4. Submits `requestAttestation` to `FdcHub` (paying the FDC fee)
+     5. Returns `{ phase: 'waiting_finalization', votingRound, abiEncodedRequest }`
+   - The frontend polls Phase 2 every 10s. The server searches rounds
+     **N through N+4** for the attestation proof in the DA Layer — this is
+     required because FDC attestations submitted in round N are voted on and
+     finalized in round **N+1**, so the proof appears under round N+1, not N.
+     The DA Layer only returns proofs for finalized, indexed rounds.
+   - On finding a proof, the server calls
+     `AssetManagerFXRP.executeDirectMinting(proof)` — FXRP is minted to the
+     user's EVM address. If the call reverts (e.g. `PaymentAlreadyConfirmed`
+     because an attestation bot already processed the payment), the server
+     checks the user's FXRP balance; if > 0, the flow completes.
    - The user signs `approve` + `depositFXRP` via MetaMask
    - The TEE daemon picks up the `DepositMade` event and publishes a fresh
      solvency root within 15 seconds
+   - A 5-minute timeout shows a helpful retry message if the Coston2
+     attestation network is congested
 
-The production path takes ~3-5 minutes end-to-end (mostly FDC finalization).
-The `/api/fassets-mint?info=true` endpoint returns the live Core Vault address,
-fee schedule, and memo format from the on-chain `AssetManagerFXRP` contract.
+The production path takes ~2-4 minutes end-to-end (mostly FDC finalization +
+DA Layer proof indexing). The API route uses `maxDuration = 300` so it never
+times out on Vercel. The `/api/fassets-mint?info=true` endpoint returns the
+live Core Vault address, fee schedule, memo format, server wallet address,
+and `autoSendAvailable` flag from the on-chain `AssetManagerFXRP` contract.
+
+> **Xaman (optional):** A Xaman deep-link helper (`/api/xaman-payment-link`)
+> remains available for users who prefer to sign the XRPL payment in their own
+> wallet, but it is not required. Set `XAMM_API_KEY` + `XAMM_API_SECRET` on the
+> server to enable QR-code sign-in; otherwise the auto-send path is used.
 
 ---
 
@@ -267,7 +296,7 @@ cast codesize 0xcb08be1cc86d3f94c54c64682372e32f669134bc --rpc-url $RPC   # 5103
 
 # 2. Read solvency state — isSolvent() returns (bool, uint256)
 cast call 0xf52c1fd632d853ee46a48a82064d3f5d390f057d "isSolvent()" --rpc-url $RPC
-#   → (false, 14000)  ← WARNING state (140% < 150% threshold)
+#   → (true, 16666)  ← SOLVENT state (~166% > 150% threshold)
 
 # 3. Policy + instruction counts
 cast call 0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5 "getPolicyCount()"      --rpc-url $RPC   # 3
@@ -288,7 +317,7 @@ done
 bash scripts/verify-aegis.sh
 
 # 7. Run the test suites
-cd contracts  && forge test --summary          # 143 tests, 0 failures
+cd contracts  && forge test --summary          # 295 tests, 0 failures
 cd extension  && go test ./...                  # 13 packages
 cd frontend   && npx tsc --noEmit && npm run build
 ```
@@ -301,10 +330,10 @@ Aegis is an original implementation built from scratch. Every core component was
 
 | Component | Description |
 |---|---|
-| **Vault contracts** (Solidity 0.8.27) | `VaultCore`, `PolicyRegistry`, `SolvencyRoot`, `InstructionSender`, `VerifierRole`, `FDCAttestor`, `PMWInstructionRelay` + interfaces — 143 Foundry tests incl. fuzz & invariant tests. |
+| **Vault contracts** (Solidity 0.8.27) | `VaultCore`, `PolicyRegistry`, `SolvencyRoot`, `InstructionSender`, `VerifierRole`, `FDCAttestor`, `PMWInstructionRelay` + interfaces — 295 Foundry tests incl. fuzz & invariant tests. |
 | **FCC extension** (Go, in TEE) | `PositionComputer`, `RiskAgent` (XGBoost, 200 trees), `Policy` engine, `SolvencyAttestor`, `ActionExecutor`, FDC + PMW clients — 13 tested packages. |
 | **TypeScript SDK** | `vault-client`, `policy-client`, `audit-client`, provider + config — compiles clean. |
-| **Institutional dashboard** (Next.js 16) | Treasury / Policy / Audit views, 10 API routes reading live Coston2 state, deployed to Vercel. |
+| **Institutional dashboard** (Next.js 16) | Treasury / Policy / Audit views, 18 API routes reading live Coston2 state, deployed to Vercel. |
 | **Deployment** | Full Coston2 deployment of all 7 contracts + integration with Flare system contracts (FtsoV2, FdcHub, FdcVerification, FlareTeeManager). |
 | **Docs** | `architecture.md`, `deployment.md`, `security.md`, `api.md` + this README. |
 
@@ -326,7 +355,7 @@ aegis/
 ├── contracts/                      # Foundry project (Solidity 0.8.27)
 │   ├── foundry.toml
 │   ├── src/                        # 7 vault contracts + interfaces (vault, fassets, pmw, fdc)
-│   ├── test/                       # 143 tests incl. fuzz, invariant, fork
+│   ├── test/                       # 295 tests incl. fuzz, invariant, fork
 │   └── script/                     # Deploy scripts (Vault, FDCAttestor, PMWInstructionRelay, …)
 ├── extension/                      # FCC extension (Go, runs inside TEE)
 │   ├── cmd/
@@ -348,10 +377,10 @@ aegis/
 
 | Component | Result |
 |---|---|
-| Foundry (Solidity) | **143 tests pass**, 0 failures (incl. fuzz, invariant, and Coston2 fork tests) |
+| Foundry (Solidity) | **295 tests pass**, 0 failures (incl. fuzz, invariant, and Coston2 fork tests) |
 | Go extension | **13 packages pass** (`go test ./...`) |
 | TypeScript SDK | Compiles clean (`tsc --noEmit`) |
-| Frontend | Next.js 16.3 build, 10 API routes, TypeScript + ESLint clean |
+| Frontend | Next.js 16.3 build, 18 API routes, TypeScript clean (`tsc --noEmit`); ESLint warnings pre-existing, non-blocking |
 | CI | GitHub Actions on every push and PR |
 
 ---
