@@ -6,7 +6,7 @@
 
 [![Flare](https://img.shields.io/badge/Flare-Coston2-ff4d2e?style=flat-square&logo=flare)](https://flare.network)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
-[![Foundry Tests](https://img.shields.io/badge/Foundry-295%20passing-success?style=flat-square)](./contracts)
+[![Foundry Tests](https://img.shields.io/badge/Foundry-358%20passing-success?style=flat-square)](./contracts)
 [![Live Dashboard](https://img.shields.io/badge/Dashboard-Live-brightgreen?style=flat-square)](https://aegis-mantle-deploy-s-projects.vercel.app)
 
 </div>
@@ -177,7 +177,7 @@ The Go extension's `OnChainPublisher` publishes solvency proofs to the
 `SolvencyRoot` contract on Coston2. To run the TEE directly:
 
 ```bash
-# From the aegis-rewrite root
+# From the repo root
 export AEGIS_VERIFIER_PRIVATE_KEY=0x...   # the verifier key (has VERIFIER role)
 export AEGIS_SOLVENCY_ROOT_ADDRESS=0xf52c1fd632d853ee46a48a82064d3f5d390f057d
 export AEGIS_VAULT_CORE_ADDRESS=0xcb08be1cc86d3f94c54c64682372e32f669134bc
@@ -313,7 +313,7 @@ done
 bash scripts/verify-aegis.sh
 
 # 7. Run the test suites
-cd contracts  && forge test --summary          # 295 tests, 0 failures
+cd contracts  && forge test --summary          # 358 tests, 0 failures
 cd extension  && go test ./...                  # 13 packages
 cd frontend   && npx tsc --noEmit && npm run build
 ```
@@ -326,7 +326,7 @@ Aegis is an original implementation. The core components:
 
 | Component | Description |
 |---|---|
-| **Vault contracts** (Solidity 0.8.27) | `VaultCore`, `PolicyRegistry`, `SolvencyRoot`, `InstructionSender`, `VerifierRole`, `FDCAttestor`, `PMWInstructionRelay` + interfaces — 295 Foundry tests incl. fuzz & invariant tests. |
+| **Vault contracts** (Solidity 0.8.27) | `VaultCore`, `PolicyRegistry`, `SolvencyRoot`, `InstructionSender`, `VerifierRole`, `FDCAttestor`, `PMWInstructionRelay` + interfaces — 358 Foundry tests incl. fuzz & invariant tests. |
 | **FCC extension** (Go, in TEE) | `PositionComputer`, `RiskAgent` (XGBoost, 200 trees), `Policy` engine, `SolvencyAttestor`, `ActionExecutor`, FDC + PMW clients — 13 tested packages. |
 | **TypeScript SDK** | `vault-client`, `policy-client`, `audit-client`, provider + config — compiles clean. |
 | **Institutional dashboard** (Next.js 16) | Treasury / Policy / Audit views, 18 API routes reading live Coston2 state, deployed to Vercel. |
@@ -351,7 +351,7 @@ aegis/
 ├── contracts/                      # Foundry project (Solidity 0.8.27)
 │   ├── foundry.toml
 │   ├── src/                        # 7 vault contracts + interfaces (vault, fassets, pmw, fdc)
-│   ├── test/                       # 295 tests incl. fuzz, invariant, fork
+│   ├── test/                       # 358 tests incl. fuzz, invariant, fork
 │   └── script/                     # Deploy scripts (Vault, FDCAttestor, PMWInstructionRelay, …)
 ├── extension/                      # FCC extension (Go, runs inside TEE)
 │   ├── cmd/
@@ -373,7 +373,7 @@ aegis/
 
 | Component | Result |
 |---|---|
-| Foundry (Solidity) | **295 tests pass**, 0 failures (incl. fuzz, invariant, and Coston2 fork tests) |
+| Foundry (Solidity) | **358 tests pass**, 0 failures (incl. fuzz, invariant, and Coston2 fork tests) |
 | Go extension | **13 packages pass** (`go test ./...`) |
 | TypeScript SDK | Compiles clean (`tsc --noEmit`) |
 | Frontend | Next.js 16.3 build, 18 API routes, TypeScript clean (`tsc --noEmit`) |

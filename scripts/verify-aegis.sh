@@ -4,6 +4,7 @@
 
 BASE_URL="https://aegis-mantle-deploy-s-projects.vercel.app"
 RPC_URL="https://coston2-api.flare.network/ext/C/rpc"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PASS=0
 FAIL=0
 ISSUES=()
@@ -28,7 +29,7 @@ echo ""
 
 # ─── 1. Build & TypeScript ─────────────────────────────────
 echo "── 1. BUILD & TYPESCRIPT ──"
-cd /home/z/my-project/frontend
+cd "$REPO_ROOT/frontend"
 
 # TypeScript check
 tsc_result=$(npx tsc --noEmit 2>&1)
@@ -200,7 +201,7 @@ echo ""
 echo "── 7. COMPONENT INTEGRATION ──"
 
 # Check that all new components are imported in treasury-view
-tv_file="/home/z/my-project/frontend/src/components/aegis/treasury-view.tsx"
+tv_file="$REPO_ROOT/frontend/src/components/aegis/treasury-view.tsx"
 check "DepositFlow imported in TreasuryView" "$([ -n "$(grep 'DepositFlow' $tv_file)" ] && echo true || echo false)"
 check "ConfidentialPosition imported in TreasuryView" "$([ -n "$(grep 'ConfidentialPosition' $tv_file)" ] && echo true || echo false)"
 check "RiskRebalance imported in TreasuryView" "$([ -n "$(grep 'RiskRebalance' $tv_file)" ] && echo true || echo false)"
@@ -216,7 +217,7 @@ echo ""
 # ─── 8. Hook Verification ────────────────────────────────────
 echo "── 8. HOOK VERIFICATION ──"
 
-hooks_file="/home/z/my-project/frontend/src/hooks/use-aegis-data.ts"
+hooks_file="$REPO_ROOT/frontend/src/hooks/use-aegis-data.ts"
 check "useVaultState hook exists" "$([ -n "$(grep 'export function useVaultState' $hooks_file)" ] && echo true || echo false)"
 check "useSolvencyData hook exists" "$([ -n "$(grep 'export function useSolvencyData' $hooks_file)" ] && echo true || echo false)"
 check "usePolicyData hook exists" "$([ -n "$(grep 'export function usePolicyData' $hooks_file)" ] && echo true || echo false)"
