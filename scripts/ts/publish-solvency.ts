@@ -25,7 +25,10 @@ import {
 const zeroHash = '0x' + '0'.repeat(64);
 
 const RPC = 'https://coston2-api.flare.network/ext/C/rpc';
-const VERIFIER_PRIVATE_KEY = process.env.VERIFIER_PRIVATE_KEY || '0xb3e509a0949e4d4ae489025a95eae959df178188f2c6ca130eceb2ef4ac70951';
+const VERIFIER_PRIVATE_KEY = process.env.VERIFIER_PRIVATE_KEY;
+if (!VERIFIER_PRIVATE_KEY) {
+  throw new Error('VERIFIER_PRIVATE_KEY environment variable is not set.');
+}
 
 const AEGIS = {
   VaultCore: '0xcb08be1cc86d3f94c54c64682372e32f669134bc',

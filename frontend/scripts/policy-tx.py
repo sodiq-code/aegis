@@ -22,7 +22,10 @@ import urllib.request
 RPC_URL = 'https://coston2-api.flare.network/ext/C/rpc'
 POLICY_REGISTRY = '0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5'
 CHAIN_ID = 114
-PRIVATE_KEY = os.environ.get('AEGIS_DEPLOYER_KEY', '0xb3e509a0949e4d4ae489025a95eae959df178188f2c6ca130eceb2ef4ac70951')
+PRIVATE_KEY = os.environ.get('AEGIS_DEPLOYER_KEY')
+if not PRIVATE_KEY:
+    print('ERROR: AEGIS_DEPLOYER_KEY environment variable is not set.', file=sys.stderr)
+    sys.exit(1)
 
 
 def rpc_call(method, params=None):

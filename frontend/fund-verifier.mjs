@@ -37,8 +37,11 @@ const COSTON2_RPC = 'https://coston2-api.flare.network/ext/C/rpc';
 
 // Verifier EVM wallet — receives the minted FXRP and pays the FDC fee + gas.
 const VERIFIER_EVM = '0xe37Ee912289B047A7C5e9DC8c15ab23E21b8b0C4';
-const VERIFIER_PRIVATE_KEY =
-  '0xb3e509a0949e4d4ae489025a95eae959df178188f2c6ca130eceb2ef4ac70951';
+const VERIFIER_PRIVATE_KEY = process.env.AEGIS_VERIFIER_PRIVATE_KEY;
+if (!VERIFIER_PRIVATE_KEY) {
+  console.error('ERROR: AEGIS_VERIFIER_PRIVATE_KEY environment variable is not set.');
+  process.exit(1);
+}
 
 // FAssets Core Vault (XRPL testnet) — destination for the direct-mint payment.
 const FASSETS_CORE_VAULT = 'rDhpmiPq4BVBDWMVdSrmkgt8thKyRzGV1p';

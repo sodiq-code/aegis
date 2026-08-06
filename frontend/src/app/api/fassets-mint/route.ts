@@ -62,8 +62,13 @@ const FDC_PROTOCOL_ID = 200;
 // Verifier private key for paying FDC fees + calling executeDirectMinting
 // (In production, the user would sign these via MetaMask; for the demo, we
 //  use the verifier key as the executor.)
-const VERIFIER_PRIVATE_KEY = process.env.AEGIS_VERIFIER_PRIVATE_KEY ||
-  '0xb3e509a0949e4d4ae489025a95eae959df178188f2c6ca130eceb2ef4ac70951';
+const VERIFIER_PRIVATE_KEY = process.env.AEGIS_VERIFIER_PRIVATE_KEY;
+if (!VERIFIER_PRIVATE_KEY) {
+  throw new Error(
+    'AEGIS_VERIFIER_PRIVATE_KEY environment variable is not set. ' +
+    'Configure it in your deployment environment (e.g. Vercel project settings).'
+  );
+}
 
 // ─── Stateless Design ─────────────────────────────────────────────────────
 //
