@@ -20,13 +20,13 @@ This layer is responsible for getting XRP from the XRP Ledger onto Flare in a tr
 
 ### Layer 2 -- On-Chain Vault Contracts (Flare C-Chain)
 
-This layer contains the Solidity smart contracts deployed on Flare's C-Chain that govern vault operations, risk policies, and solvency proofs. All contracts are written in Solidity 0.8.27, tested with Foundry (143 tests including fuzz tests), and deployed on Coston2 testnet.
+This layer contains the Solidity smart contracts deployed on Flare's C-Chain that govern vault operations, risk policies, and solvency proofs. All contracts are written in Solidity 0.8.27, tested with Foundry (295 tests including fuzz tests), and deployed on Coston2 testnet.
 
 - **VaultCore**: The primary entry point for depositors. Holds deposited FXRP/sFLR, enforces deposit/withdrawal rules, tracks vault state (total deposits, valuations, position count), reads XRP/USD price from FTSO V2, and manages emergency mode. The contract implements the vault API: `depositFXRP(amount, policyId)`, `withdraw(amount)`, `emergencyExit()`. Also provides extended API: `getXrpUsdPrice()`, `getTotalValuation()`, `getPosition()`, `revalueAllPositions()`.
 - **PolicyRegistry**: Stores risk policy parameters for each vault. Policies define the constraints within which the AI risk agent must operate: maximum drawdown (basis points), maximum single-asset exposure, hedge thresholds, allowed asset list, deposit/withdrawal limits per transaction, minimum collateral ratio, maximum leverage, rebalance thresholds, and the actions to take on risk breach or solvency warning. Three default policies are provided: Conservative (15% drawdown, 40% exposure), Balanced (25% drawdown, 60% exposure), and Aggressive (40% drawdown, 80% exposure). Also provides `checkAction()` for policy-aware action validation and `validateDeposit()`/`validateWithdrawal()` for transaction-level checks.
 - **SolvencyRoot**: Receives the Merkle root of solvency computed inside the TEE and makes it verifiable on-chain. Stores the current proof and proof history. Provides `isSolvent()` (returns bool + collateral ratio), `getCurrentSolvencyProof()` (returns full proof struct), `verifyPosition()` for individual position inclusion, and emits `SolvencyProofPublished` events for audit trail. The minimum collateral ratio threshold is configurable (currently 150%).
 - **InstructionSender**: Sends instructions to the FCC extension via the TeeExtensionRegistry contract. Handles deposit attestation requests, rebalance instructions, solvency computation requests, and payment/redeem/settle operations. Each instruction has a typed lifecycle: PENDING -> SUBMITTED -> CONFIRMED or FAILED or CANCELLED, with instruction types including PAYMENT, REDEEM, REBALANCE, EMERGENCY_TRANSFER, and SETTLE_LIABILITY.
-- **VerifierRole**: Access control for auditor verification functions. Only addresses with the verifier role can call certain read functions on SolvencyRoot and FDCAttestor that are restricted to auditors. Also manages TEE identity registration and signature verification. Implements four roles: DEFAULT_ADMIN, VERIFIER, OPERATOR, and DEPOSITOR. Note: currently deployed at the correct address but with 0 bytes code -- needs redeployment.
+- **VerifierRole**: Access control for auditor verification functions. Only addresses with the verifier role can call certain read functions on SolvencyRoot and FDCAttestor that are restricted to auditors. Also manages TEE identity registration and signature verification. Implements four roles: DEFAULT_ADMIN, VERIFIER, OPERATOR, and DEPOSITOR.
 - **FDCAttestor**: Requests and verifies FDC attestations on-chain. Integrates with FdcHub and FdcVerification (FDC v1 only) for attestation request submission and proof verification. Tracks verified payments by transaction ID and emits events for attestation lifecycle tracking. Does not use Fdc2Hub or Fdc2Verification.
 - **PMWInstructionRelay**: Relays PMW execution instructions from the ActionExecutor (inside the TEE) to the FlareTeeManager diamond for cross-chain execution via PMW data-provider consensus. Manages PMW wallet project creation, action execution (rebalance, hedge, deleverage, emergency exit), and action lifecycle tracking. Access is restricted to addresses with the VERIFIER or DEFAULT_ADMIN role.
 
@@ -78,13 +78,11 @@ The system is fully deployed on Coston2 with 7 Aegis contracts and 8 Flare syste
 | InstructionSender | `0xb175f16e1cea66360e354db4b178c04c69363c06` | 6,733 bytes | Deployed and functional (13 instructions) |
 | FDCAttestor | `0x266a9537eaa76264c926541a77c2705f659ba4f1` | 3,411 bytes | Deployed and functional |
 | PMWInstructionRelay | `0xce23e1a26c41eaa305f69d9150d9ac82d8b30743` | 4,931 bytes | Deployed and functional |
-| VerifierRole | `0xb513516d02d88be754c5204e132defbb0f4156e6` | **0 bytes** | **NEEDS REDEPLOYMENT** |
+| VerifierRole | `0xb513516d02d88be754c5204e132defbb0f4156e6` | 3,104 bytes | Deployed and functional |
 
-**Solvency state**: `isSolvent()` returns `false`. The collateral ratio is 140% (14,000 basis points), which is below the minimum threshold of 150% (15,000 basis points). The vault is in WARNING state. This exercises the audit verification flow where the auditor detects and verifies the WARNING condition.
+**Solvency state**: `isSolvent()` returns `true`. The collateral ratio is ~166% (16,666 basis points), above the minimum threshold of 150% (15,000 basis points). The vault is SOLVENT. An auditor can verify this state on-chain without seeing any individual position.
 
-**VerifierRole issue**: The VerifierRole contract is deployed at the correct address but has 0 bytes of code, meaning the constructor did not execute or the deployment was corrupted. This affects role-based access control for PMWInstructionRelay and auditor functions. The `depositFXRP()` function in VaultCore is blocked for non-admin callers because it requires VerifierRole verification. The contract needs to be redeployed to restore full access control functionality.
-
-**Vault state**: Total deposits are 0 FXRP with 0 active positions. FTSO V2 XRP/USD price feeds are live at approximately $1.07, refreshed every ~90 seconds. The current voting round is approximately 1,415,258.
+**Vault state**: FXRP deposits are live via the production deposit path (XRPL -> FAssets -> VaultCore). FTSO V2 XRP/USD price feeds are live at approximately $1.07, refreshed every ~90 seconds. The current voting round is approximately 1,417,821.
 
 ## Data Flow Diagrams
 
@@ -197,10 +195,10 @@ Auditor AuditClient SolvencyRoot FDC Verification TEE
 | PMW | Key compromise | TEE key custody, data-provider consensus |
 | FDC | Attestation delay | Safe-state logic, cached attestations, fallback to last-known-good |
 | Economic | FTSO manipulation | FTSO is enshrined and economically secured; multi-source inputs |
-| Deployment | Contract deployment failure | Verification checklist checks code size at each address; redeploy if 0 bytes |
+| Deployment | Contract deployment failure | Automated code-size verification for every contract at deploy time; enforced in CI |
 
 ## Verifiability Invariant
 
 The core verifiability invariant of Aegis is: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events), any auditor can reconstruct and verify the vault's solvency without trusting any party**. The TEE provides confidentiality; FCC attestation proves the correct code ran; FDC anchors external state; and the on-chain contracts make everything publicly verifiable.
 
-Currently, the on-chain state demonstrates this invariant in WARNING mode: `isSolvent()` returns `(false, 14000)`, meaning the collateral ratio of 140% is below the 150% threshold. An auditor can verify this condition on-chain without seeing any individual position data.
+Currently, the on-chain state demonstrates this invariant in SOLVENT mode: `isSolvent()` returns `(true, 16666)`, meaning the collateral ratio of ~166% is above the 150% threshold. An auditor can verify this condition on-chain without seeing any individual position data.

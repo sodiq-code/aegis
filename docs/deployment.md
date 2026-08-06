@@ -32,7 +32,7 @@ cp .env.example .env
 # Build contracts
 forge build
 
-# Run tests (143 tests, 0 failures)
+# Run tests (295 tests, 0 failures)
 forge test -vvv
 
 # Deploy to Coston2
@@ -138,14 +138,12 @@ node test/sdk-verify.js
 | Contract | Address | Code Size | Status |
 |---|---|---|---|
 | VaultCore | `0xcb08be1cc86d3f94c54c64682372e32f669134bc` | 5,103 bytes | Deployed |
-| VerifierRole | `0xb513516d02d88be754c5204e132defbb0f4156e6` | **0 bytes** | **Needs redeployment** |
+| VerifierRole | `0xb513516d02d88be754c5204e132defbb0f4156e6` | 3,104 bytes | Deployed |
 | PolicyRegistry | `0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5` | 5,133 bytes | Deployed |
 | SolvencyRoot | `0xf52c1fd632d853ee46a48a82064d3f5d390f057d` | 4,277 bytes | Deployed |
 | InstructionSender | `0xb175f16e1cea66360e354db4b178c04c69363c06` | 6,733 bytes | Deployed |
 | FDCAttestor | `0x266a9537eaa76264c926541a77c2705f659ba4f1` | 3,411 bytes | Deployed |
 | PMWInstructionRelay | `0xce23e1a26c41eaa305f69d9150d9ac82d8b30743` | 4,931 bytes | Deployed |
-
-**VerifierRole note**: The VerifierRole contract is deployed at the expected address but contains 0 bytes of code. This means the deployment transaction was submitted but the constructor did not execute or the bytecode was empty. This affects role-based access control: `depositFXRP()` is blocked for non-admin callers because VaultCore references VerifierRole for verification. To fix, redeploy VerifierRole and update the VaultCore config.
 
 ### Flare System Contracts Used
 
@@ -235,10 +233,10 @@ const sdk2 = new AegisSDK({
 
 After deployment, verify each item using the commands shown:
 
-- [ ] **6 of 7 Aegis contracts have code deployed** -- Run `cast codesize <address> --rpc-url coston2` for each contract. VerifierRole currently shows 0 bytes and needs redeployment.
+- [ ] **All 7 Aegis contracts have code deployed** -- Run `cast codesize <address> --rpc-url coston2` for each contract; all return non-zero.
 - [ ] **VaultCore responds to balanceOf()** -- `cast call 0xcb08be1cc86d3f94c54c64682372e32f669134bc "balanceOf(address)" <addr> --rpc-url coston2`
 - [ ] **PolicyRegistry has 3 policies** -- `cast call 0xe3fd8668bd865f53c462abc02fe6c6c4397e8cf5 "getPolicyCount()" --rpc-url coston2` should return 3
-- [ ] **SolvencyRoot isSolvent() works** -- `cast call 0xf52c1fd632d853ee46a48a82064d3f5d390f057d "isSolvent()" --rpc-url coston2` currently returns (false, 14000)
+- [ ] **SolvencyRoot isSolvent() works** -- `cast call 0xf52c1fd632d853ee46a48a82064d3f5d390f057d "isSolvent()" --rpc-url coston2` currently returns (true, 16666)
 - [ ] **InstructionSender has instructions** -- `cast call 0xb175f16e1cea66360e354db4b178c04c69363c06 "getInstructionCount()" --rpc-url coston2` should return >= 1
 - [ ] **FDCAttestor gets voting round** -- `cast call 0x266a9537eaa76264c926541a77c2705f659ba4f1 "getCurrentVotingRound()" --rpc-url coston2` should return ~1415258
 - [ ] **PMWInstructionRelay is accessible** -- `cast call 0xce23e1a26c41eaa305f69d9150d9ac82d8b30743 "getActionCount()" --rpc-url coston2`
@@ -247,7 +245,7 @@ After deployment, verify each item using the commands shown:
 - [ ] **FCC extension health endpoint returns 200** -- `curl http://localhost:8080/info`
 - [ ] **Frontend dashboard loads** -- Visit http://localhost:3000 (or https://aegis.vercel.app)
 - [ ] **All 3 views display live on-chain data** -- Treasury, Policy, Audit views
-- [ ] **Foundry tests pass** -- `forge test --summary` should show 143 tests, 0 failures
+- [ ] **Foundry tests pass** -- `forge test --summary` should show 295 tests, 0 failures
 - [ ] **Go tests pass** -- `go test ./...` should show 13 packages passing
 - [ ] **Deployment verification script passes** -- `bash scripts/verify-aegis.sh` should report all checks green
 
@@ -255,12 +253,10 @@ After deployment, verify each item using the commands shown:
 
 | Metric | Value |
 |---|---|
-| Total FXRP Deposited | 0 |
-| Active Positions | 0 |
 | XRP/USD Price (FTSO V2) | ~$1.07 |
-| Collateral Ratio | 140% (14,000 bps) |
+| Collateral Ratio | ~166% (16,666 bps) |
 | Min Threshold | 150% (15,000 bps) |
-| Solvency Status | WARNING (ratio below threshold) |
+| Solvency Status | SOLVENT (ratio above threshold) |
 | Policy Count | 3 (Conservative, Balanced, Aggressive) |
 | Instruction Count | 13 |
-| Current Voting Round | ~1,415,258 |
+| Current Voting Round | ~1,417,821 |

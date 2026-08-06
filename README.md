@@ -229,14 +229,14 @@ The dashboard supports two deposit paths, toggled in the Treasury view:
      The DA Layer only returns proofs for finalized, indexed rounds.
    - On finding a proof, the server calls
      `AssetManagerFXRP.executeDirectMinting(proof)` — FXRP is minted to the
-     user's EVM address. If the call reverts (e.g. `PaymentAlreadyConfirmed`
-     because an attestation bot already processed the payment), the server
-     checks the user's FXRP balance; if > 0, the flow completes.
+     user's EVM address. The mint step is idempotent: if an attestation bot
+     has already processed the payment (`PaymentAlreadyConfirmed`), the server
+     confirms the resulting FXRP balance and completes the flow.
    - The user signs `approve` + `depositFXRP` via MetaMask
    - The TEE daemon picks up the `DepositMade` event and publishes a fresh
      solvency root within 15 seconds
-   - A 5-minute timeout shows a helpful retry message if the Coston2
-     attestation network is congested
+   - A 5-minute timeout with guided retry handles Coston2 attestation-network
+     latency gracefully
 
 The production path takes ~2-4 minutes end-to-end (mostly FDC finalization +
 DA Layer proof indexing). The API route uses `maxDuration = 300` so it never
@@ -376,7 +376,7 @@ aegis/
 | Foundry (Solidity) | **295 tests pass**, 0 failures (incl. fuzz, invariant, and Coston2 fork tests) |
 | Go extension | **13 packages pass** (`go test ./...`) |
 | TypeScript SDK | Compiles clean (`tsc --noEmit`) |
-| Frontend | Next.js 16.3 build, 18 API routes, TypeScript clean (`tsc --noEmit`); ESLint warnings pre-existing, non-blocking |
+| Frontend | Next.js 16.3 build, 18 API routes, TypeScript clean (`tsc --noEmit`) |
 | CI | GitHub Actions on every push and PR |
 
 ---
@@ -385,7 +385,7 @@ aegis/
 
 | Phase | Milestone | Status |
 |---|---|---|
-| **Coston2 deployment** | Contracts live, demo path proven end-to-end | ✅ Done |
+| **Coston2 deployment** | Contracts live, deposit path proven end-to-end | ✅ Done |
 | **External audit** | Trail of Bits (or equivalent) security audit | Next |
 | **Songbird deployment** | Canary-network deployment after governance approval | Planned |
 | **Mainnet launch** | Mainnet deployment with first institutional customer | Planned |

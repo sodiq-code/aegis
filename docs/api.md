@@ -306,7 +306,7 @@ interface IInstructionSender {
 
 Access control for auditor verification functions. Only addresses with the verifier role can call certain read functions on SolvencyRoot and FDCAttestor that are restricted to auditors. Also manages TEE identity registration and signature verification. Implements four roles: DEFAULT_ADMIN, VERIFIER, OPERATOR, and DEPOSITOR.
 
-**Deployed on Coston2**: `0xb513516d02d88be754c5204e132defbb0f4156e6` (NOTE: 0 bytes code -- needs redeployment)
+**Deployed on Coston2**: `0xb513516d02d88be754c5204e132defbb0f4156e6` (3,104 bytes)
 
 ```solidity
 interface IVerifierRole {
