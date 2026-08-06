@@ -11,6 +11,8 @@
 
 </div>
 
+> **Flare Summer Signal hackathon submission — Bounty 2: Confidential Compute Apps.**
+
 ---
 
 > Institutional XRP treasuries are forming now — and they need a way to hold, hedge, and prove solvency without exposing positions. Aegis is the only product that makes this possible, by running an AI risk agent inside a Flare TEE and publishing a verifiable solvency proof — so an auditor can confirm a treasury is solvent **without ever seeing a single position**.
