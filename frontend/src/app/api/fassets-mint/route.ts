@@ -62,12 +62,20 @@ const FDC_PROTOCOL_ID = 200;
 // Verifier private key for paying FDC fees + calling executeDirectMinting
 // (In production, the user would sign these via MetaMask; for the demo, we
 //  use the verifier key as the executor.)
-const VERIFIER_PRIVATE_KEY = process.env.AEGIS_VERIFIER_PRIVATE_KEY;
-if (!VERIFIER_PRIVATE_KEY) {
-  throw new Error(
-    'AEGIS_VERIFIER_PRIVATE_KEY environment variable is not set. ' +
-    'Configure it in your deployment environment (e.g. Vercel project settings).'
-  );
+//
+// Read lazily via getVerifierPrivateKey() so that this module can be imported
+// during `next build` (which evaluates route modules for metadata) without
+// requiring the env var in the build environment. The key is only read when a
+// request actually arrives, failing loud and clear if misconfigured.
+function getVerifierPrivateKey(): string {
+  const key = process.env.AEGIS_VERIFIER_PRIVATE_KEY;
+  if (!key) {
+    throw new Error(
+      'AEGIS_VERIFIER_PRIVATE_KEY environment variable is not set. ' +
+      'Configure it in your deployment environment (e.g. Vercel project settings).'
+    );
+  }
+  return key;
 }
 
 // ─── Stateless Design ─────────────────────────────────────────────────────
@@ -234,7 +242,7 @@ async function submitAttestationRequest(
   const fee = await feeCfg.getRequestFee(abiEncodedRequest);
 
   // Submit with the verifier key
-  const wallet = new ethers.Wallet(VERIFIER_PRIVATE_KEY, provider);
+  const wallet = new ethers.Wallet(getVerifierPrivateKey(), provider);
   const fdcHubAbi = ['function requestAttestation(bytes) payable'];
   const fdcHub = new ethers.Contract(FLARE_SYSTEM_CONTRACTS.FdcHub, fdcHubAbi, wallet);
 
@@ -303,7 +311,7 @@ async function executeDirectMinting(
 ): Promise<{ txHash: string; mintedAmount: string }> {
   const config = getFlareConfig();
   const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-  const wallet = new ethers.Wallet(VERIFIER_PRIVATE_KEY, provider);
+  const wallet = new ethers.Wallet(getVerifierPrivateKey(), provider);
 
   // The IXRPPayment.Proof struct + Response struct ABI in JSON format
   // (human-readable tuple syntax doesn't parse reliably for deep nesting)
