@@ -22,7 +22,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## API Routes
 
-All routes connect to real Flare Coston2 RPC data.
+All routes connect to live Flare Coston2 RPC data.
 
 | Route | Method | Description |
 |-------|--------|-------------|

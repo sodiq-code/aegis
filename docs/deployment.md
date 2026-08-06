@@ -246,7 +246,7 @@ After deployment, verify each item using the commands shown:
 - [ ] **All 8 system contracts reachable** -- Verify FtsoV2, FdcHub, FdcVerification, FdcRequestFeeConfigs, FlareSystemsManager, FlareTeeManager, Fdc2Hub, Fdc2Verification
 - [ ] **FCC extension health endpoint returns 200** -- `curl http://localhost:8080/info`
 - [ ] **Frontend dashboard loads** -- Visit http://localhost:3000 (or https://aegis.vercel.app)
-- [ ] **All 3 views display real on-chain data** -- Treasury, Policy, Audit views
+- [ ] **All 3 views display live on-chain data** -- Treasury, Policy, Audit views
 - [ ] **Foundry tests pass** -- `forge test --summary` should show 143 tests, 0 failures
 - [ ] **Go tests pass** -- `go test ./...` should show 13 packages passing
 - [ ] **Deployment verification script passes** -- `bash scripts/verify-aegis.sh` should report all checks green

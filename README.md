@@ -13,21 +13,19 @@
 
 ---
 
-> Institutional XRP treasuries are forming now — and they need a way to hold, hedge, and prove solvency without exposing positions. Aegis is the only product that makes this possible, by running an AI risk agent inside a Flare TEE and publishing a verifiable solvency proof — so an auditor can confirm a treasury is solvent **without ever seeing a single position**.
+> Aegis is a treasury protocol for XRP-native institutions on Flare. An AI risk agent runs inside a Flare TEE and publishes a verifiable solvency proof, so an auditor can confirm a treasury is solvent without seeing individual positions.
 
 ---
 
 ## Key features
 
-- **All five Flare primitives are load-bearing.** FAssets, FTSO, FDC, FCC, and PMW are each structurally required — remove any one and the product cannot exist. Aegis uses all five together in non-trivial ways.
-- **Built for institutional treasury management.** Targets corporate XRP treasuries and large FLR holders — a segment publicly validated by Flare's VivoPower and BitGo partnerships, with no dedicated product surface on Flare today.
-- **Verifiable-confidential pattern.** Positions are computed inside a TEE and published as a Merkle root, so an auditor can verify solvency cryptographically **without ever seeing an individual position**.
+- **All five Flare primitives are load-bearing.** FAssets, FTSO, FDC, FCC, and PMW are each structurally required for the protocol to function.
+- **Built for institutional treasury management.** Targets corporate XRP treasuries and large FLR holders.
+- **Verifiable-confidential pattern.** Positions are computed inside a TEE and published as a Merkle root, so an auditor can verify solvency cryptographically without seeing individual positions.
 
 ---
 
 ## How Flare is used
-
-> This table makes the *“remove Flare and the product cannot exist”* argument visible at a glance.
 
 | Flare primitive | Load-bearing role in Aegis | What breaks if removed |
 |---|---|---|
@@ -73,7 +71,7 @@ Aegis is a five-layer system. Each layer depends on a specific Flare primitive a
 +---------------------------------------------------------------------+
 ```
 
-The core verifiability invariant: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events), any auditor can reconstruct and verify the vault's solvency without trusting any party.** The TEE provides confidentiality; FCC attestation proves the correct code ran; FDC anchors external state; the on-chain contracts make everything publicly verifiable. Positions are confidential, solvency is verifiable.
+The core verifiability invariant: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events), any auditor can reconstruct and verify the vault's solvency without trusting any party.** The TEE provides confidentiality; FCC attestation proves the correct code ran; FDC anchors external state; the on-chain contracts make everything publicly verifiable.
 
 Full architecture, data-flow and sequence diagrams: [`docs/architecture.md`](./docs/architecture.md).
 
@@ -81,7 +79,7 @@ Full architecture, data-flow and sequence diagrams: [`docs/architecture.md`](./d
 
 ## Deployed contracts (Coston2)
 
-All seven Aegis contracts are deployed and verifiable on the Coston2 testnet. Every address below is clickable on the explorer.
+All seven Aegis contracts are deployed and verifiable on the Coston2 testnet.
 
 ### Aegis contracts
 
@@ -123,7 +121,7 @@ The vault is live on Coston2 in the state below — any value can be re-checked 
 | Instruction count | 13 |
 | Current voting round | ~1,417,821 |
 
-The vault moved above the 150% solvency threshold after real FXRP deposits were made through the production deposit path during Phase 2 testing. The ratio fluctuates with the FTSO V2 XRP/USD price feed (refreshed every ~90s); an auditor can re-verify the current state at any time using the `cast` commands below — **without seeing any individual positions**.
+The vault moved above the 150% solvency threshold after FXRP deposits were made through the production deposit path during Phase 2 testing. The ratio fluctuates with the FTSO V2 XRP/USD price feed (refreshed every ~90s); an auditor can re-verify the current state at any time using the `cast` commands below, without seeing individual positions.
 
 ---
 
@@ -166,19 +164,17 @@ npm install && npm run dev
 
 The dashboard is also hosted live at **https://aegis-mantle-deploy-s-projects.vercel.app**.
 
-> **Tip:** For local development, the quickest way to run the real on-chain
+> **Tip:** For local development, the quickest way to run the on-chain
 > solvency publisher is the included TEE daemon script:
 > `./mini-services/aegis-tee/start.sh` (see
-> [Running the FCC extension TEE as a real daemon](#running-the-fcc-extension-tee-as-a-real-daemon)
-> below for full details). This publishes real `SolvencyRoot` proofs on Coston2
-> without needing the full Docker Compose stack.
+> [Running the FCC extension TEE as a daemon](#running-the-fcc-extension-tee-as-a-daemon)
+> below). It publishes `SolvencyRoot` proofs on Coston2 without needing the
+> full Docker Compose stack.
 
-### Running the FCC extension TEE as a real daemon
+### Running the FCC extension TEE as a daemon
 
-The Go extension's `OnChainPublisher` is wired to publish real solvency proofs
-to the `SolvencyRoot` contract on Coston2. To run the real TEE (instead of
-the dashboard's verifier-key signed publishes which stand in for the TEE
-during the demo):
+The Go extension's `OnChainPublisher` publishes solvency proofs to the
+`SolvencyRoot` contract on Coston2. To run the TEE directly:
 
 ```bash
 # From the aegis-rewrite root
@@ -199,7 +195,7 @@ When running, the TEE daemon:
 - Feeds each new deposit into the `PositionComputer` (builds the Merkle tree)
 - Computes a fresh Merkle root and publishes it on-chain via
   `SolvencyRoot.publishSolvencyProof()` signed by the verifier key
-- Reads the real voting round from `FlareSystemsManager.getCurrentVotingEpochId()`
+- Reads the current voting round from `FlareSystemsManager.getCurrentVotingEpochId()`
   (so the auditor's FDC cross-check works)
 - Runs the `RiskAgent` loop (90-second interval) with the XGBoost model
 - Maintains the `SafeStateManager` (NORMAL / SAFE / EMERGENCY modes)
@@ -271,7 +267,7 @@ const positions  = await sdk.vault.getActivePositionCount();
 
 // Solvency / audit (verifiable without seeing positions)
 const { isSolvent, collateralRatio } = await sdk.audit.isSolvent();
-// Currently: isSolvent=false, collateralRatio=14000 (140%) — WARNING
+// Currently: isSolvent=true, collateralRatio=16666 (~166%) — SOLVENT
 
 // Policy
 const policies = await sdk.policy.listPolicies();          // 3 policies
@@ -326,7 +322,7 @@ cd frontend   && npx tsc --noEmit && npm run build
 
 ## Implementation
 
-Aegis is an original implementation built from scratch. Every core component was built for this project:
+Aegis is an original implementation. The core components:
 
 | Component | Description |
 |---|---|
@@ -399,7 +395,7 @@ aegis/
 
 ## License
 
-[MIT](./LICENSE) — permissive to maximise adoption.
+[MIT](./LICENSE)
 
 ## Contributing
 

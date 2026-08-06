@@ -16,7 +16,7 @@
 
 ## Deployment Failure Threat (VerifierRole)
 
-The VerifierRole contract at `0xb513516d02d88be754c5204e132defbb0f4156e6` on Coston2 is deployed with 0 bytes of code. This is a real deployment failure that affects the system's access control layer. The specific impacts are:
+The VerifierRole contract at `0xb513516d02d88be754c5204e132defbb0f4156e6` on Coston2 is deployed with 0 bytes of code. This is a deployment failure that affects the system's access control layer. The specific impacts are:
 
 1. **Deposit blocking**: The `depositFXRP()` function in VaultCore requires VerifierRole verification for non-admin callers. With VerifierRole having no code, any call that references VerifierRole will revert. This means only admin-path deposits work.
 
@@ -54,7 +54,7 @@ If the collateral ratio continues to decline and reaches the critical threshold,
 3. Notifies the risk agent to initiate deleverage actions
 4. Publishes the state change on-chain via SolvencyRoot
 
-The WARNING state is currently the real on-chain state on Coston2. This demonstrates the audit verification flow: an auditor can verify the WARNING condition by calling `isSolvent()` on-chain without seeing any individual position data.
+The WARNING state is the current on-chain state on Coston2. An auditor can verify the WARNING condition by calling `isSolvent()` on-chain without seeing any individual position data.
 
 ## Responsible Disclosure
 

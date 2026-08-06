@@ -393,7 +393,7 @@ interface IFDCAttestor {
 
 ### PMWInstructionRelay
 
-Relays Aegis vault instructions to the FCC Diamond (FlareTeeManager) for PMW XRPL execution. Bridges the Aegis vault system and the FCC Diamond, enabling the RiskAgent to trigger real PMW XRPL transactions on policy breach. Manages PMW wallet project creation, action execution (rebalance, hedge, deleverage, emergency exit), and action lifecycle tracking. Access is restricted to addresses with the VERIFIER or DEFAULT_ADMIN role.
+Relays Aegis vault instructions to the FCC Diamond (FlareTeeManager) for PMW XRPL execution. Bridges the Aegis vault system and the FCC Diamond, enabling the RiskAgent to trigger PMW XRPL transactions on policy breach. Manages PMW wallet project creation, action execution (rebalance, hedge, deleverage, emergency exit), and action lifecycle tracking. Access is restricted to addresses with the VERIFIER or DEFAULT_ADMIN role.
 
 **Deployed on Coston2**: `0xce23e1a26c41eaa305f69d9150d9ac82d8b30743` (4,931 bytes)
 
@@ -573,7 +573,7 @@ const validWithdrawal = await policy.validateWithdrawal(1, withdrawalAmount, cur
 
 ### AuditClient
 
-Request and verify solvency attestations without seeing individual positions. This is the confidentiality-to-verifiability transformation in action.
+Request and verify solvency attestations without seeing individual positions.
 
 ```typescript
 import { AuditClient } from '@aegis/sdk';

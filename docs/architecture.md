@@ -2,7 +2,7 @@
 
 ## Overview
 
-Aegis is a verifiable, confidential, AI-managed cross-chain treasury protocol for XRP-native institutions on Flare. It uses every enshrined Flare primitive in a load-bearing way: FAssets for the core asset, FTSO for price discovery, FDC for cross-chain state attestation, FCC for confidential computation, and PMW for cross-chain execution. Remove any one primitive and the product cannot exist.
+Aegis is a verifiable, confidential, AI-managed cross-chain treasury protocol for XRP-native institutions on Flare. It uses every enshrined Flare primitive in a load-bearing way: FAssets for the core asset, FTSO for price discovery, FDC for cross-chain state attestation, FCC for confidential computation, and PMW for cross-chain execution.
 
 The architecture is organized as five distinct layers, each with a clear responsibility boundary and well-defined interfaces between them. Data flows downward from asset onboarding through vault contracts, confidential computation, cross-chain execution, and finally verification -- with each layer adding a specific capability that depends on a specific Flare primitive.
 
@@ -41,7 +41,7 @@ The FCC extension is written in Go and compiled as a shared library that runs in
 - **PositionComputer**: Rebuilds the complete vault state from on-chain events (deposits, withdrawals, rebalances) and FDC-attested external state (XRPL balances, Hyperliquid positions). Uses a keccak256-based Merkle tree to commit to the position vector. The Merkle root is what gets published on-chain via SolvencyRoot -- individual positions never leave the TEE.
 - **RiskAgent**: The AI risk agent that implements the full observe -> score -> decide -> act -> attest loop. On each iteration (triggered by FTSO price updates or threshold events), it: (1) reads FTSO price feeds and FDC-attested cross-chain state; (2) runs the XGBoost risk scoring model (200 trees, depth 6, trained on historical FTSO data); (3) produces a risk score (0-100) and action classification (hold, rebalance, hedge, deleverage); (4) passes the action to the Policy Engine for validation; (5) if approved, routes to ActionExecutor; (6) publishes updated solvency proof.
 - **Policy Engine**: Deterministic policy enforcement. Reads on-chain policy parameters from PolicyRegistry and constrains the AI agent's actions within those bounds. If the AI agent recommends an action that exceeds policy limits (e.g., rebalance exceeds maxDrawdownBps), the Policy Engine blocks it and logs the violation. This is the critical safety layer that makes the AI agent trustworthy -- it cannot exceed its mandate.
-- **SolvencyAttestor**: Computes the Merkle root of solvency and publishes it on-chain via the SolvencyRoot contract. The solvency proof asserts that total collateral exceeds total liabilities by a stated margin (surplusBps), without revealing the individual position amounts. This is the "confidentiality-to-verifiability transformation" that is the emotional core of the demo.
+- **SolvencyAttestor**: Computes the Merkle root of solvency and publishes it on-chain via the SolvencyRoot contract. The solvency proof asserts that total collateral exceeds total liabilities by a stated margin (surplusBps), without revealing the individual position amounts.
 
 **Key invariant**: All position data stays inside the TEE. Only aggregate commitments (Merkle roots) and policy-compliant actions leave the TEE. FCC attestation proves the correct code ran.
 
@@ -62,9 +62,9 @@ This layer provides the verification and audit interface that allows external pa
 
 - **FDC attestation**: Attests external chain state -- XRPL payments (using the XRPPayment attestation type), address validity (AddressValidity for compliance), and Hyperliquid state -- for position computation inside the TEE. FDC is Flare's attestation system that brings verifiable external data on-chain. The FDCAttestor contract integrates with FdcHub and FdcVerification (FDC v1).
 - **Solvency proof oracle**: The TEE-computed proof that assets exceed liabilities by a stated margin. The proof is a Merkle root published on-chain via SolvencyRoot. Anyone can verify it by: (1) reading the on-chain proof; (2) comparing the Merkle root to their own computation; (3) checking the FDC merkle root for the corresponding voting round.
-- **Auditor dashboard**: The frontend audit view that allows external auditors to request solvency attestations, verify proofs on-chain, inspect FDC infrastructure status, and view proof history -- all without ever seeing individual positions.
+- **Auditor dashboard**: The frontend audit view that allows external auditors to request solvency attestations, verify proofs on-chain, inspect FDC infrastructure status, and view proof history -- without seeing individual positions.
 
-**Key invariant**: An auditor can verify that the vault is solvent without seeing any individual position. This is the confidentiality-to-verifiability transformation.
+**Key invariant**: An auditor can verify that the vault is solvent without seeing any individual position.
 
 ## Current Deployment Status (Coston2)
 
@@ -80,7 +80,7 @@ The system is fully deployed on Coston2 with 7 Aegis contracts and 8 Flare syste
 | PMWInstructionRelay | `0xce23e1a26c41eaa305f69d9150d9ac82d8b30743` | 4,931 bytes | Deployed and functional |
 | VerifierRole | `0xb513516d02d88be754c5204e132defbb0f4156e6` | **0 bytes** | **NEEDS REDEPLOYMENT** |
 
-**Solvency state**: `isSolvent()` returns `false`. The collateral ratio is 140% (14,000 basis points), which is below the minimum threshold of 150% (15,000 basis points). The vault is in WARNING state. This is the expected state for the demo -- it demonstrates the audit verification flow where the auditor detects and verifies the WARNING condition.
+**Solvency state**: `isSolvent()` returns `false`. The collateral ratio is 140% (14,000 basis points), which is below the minimum threshold of 150% (15,000 basis points). The vault is in WARNING state. This exercises the audit verification flow where the auditor detects and verifies the WARNING condition.
 
 **VerifierRole issue**: The VerifierRole contract is deployed at the correct address but has 0 bytes of code, meaning the constructor did not execute or the deployment was corrupted. This affects role-based access control for PMWInstructionRelay and auditor functions. The `depositFXRP()` function in VaultCore is blocked for non-admin callers because it requires VerifierRole verification. The contract needs to be redeployed to restore full access control functionality.
 
@@ -201,6 +201,6 @@ Auditor AuditClient SolvencyRoot FDC Verification TEE
 
 ## Verifiability Invariant
 
-The core verifiability invariant of Aegis is: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events), any auditor can reconstruct and verify the vault's solvency without trusting any party**. The TEE provides confidentiality; FCC attestation proves the correct code ran; FDC anchors external state; and the on-chain contracts make everything publicly verifiable. This is the "confidentiality-to-verifiability transformation" -- positions are confidential, solvency is verifiable.
+The core verifiability invariant of Aegis is: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events), any auditor can reconstruct and verify the vault's solvency without trusting any party**. The TEE provides confidentiality; FCC attestation proves the correct code ran; FDC anchors external state; and the on-chain contracts make everything publicly verifiable.
 
 Currently, the on-chain state demonstrates this invariant in WARNING mode: `isSolvent()` returns `(false, 14000)`, meaning the collateral ratio of 140% is below the 150% threshold. An auditor can verify this condition on-chain without seeing any individual position data.

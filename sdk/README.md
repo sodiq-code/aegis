@@ -1,6 +1,6 @@
 # @aegis/sdk
 
-TypeScript SDK for **Aegis** — A Verifiable, Confidential, AI-Managed Cross-Chain Treasury and Autonomous Risk Layer for XRP-Native Institutions on Flare.
+TypeScript SDK for Aegis — typed access to the vault, policy, and audit contracts on Flare.
 
 ## Installation
 
