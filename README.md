@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
 [![Foundry Tests](https://img.shields.io/badge/Foundry-358%20passing-success?style=flat-square)](./contracts)
 [![Live Dashboard](https://img.shields.io/badge/Dashboard-Live-brightgreen?style=flat-square)](https://aegis-mantle-deploy-s-projects.vercel.app)
-[![Demo Video](https://img.shields.io/badge/Watch-4%20min%20Demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://youtu.be/38tjExCIeMc)
+[![Demo Video](https://img.shields.io/badge/Watch-Demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://youtu.be/38tjExCIeMc)
 
 </div>
 
@@ -24,16 +24,16 @@
 
 <p align="center">
   <a href="https://youtu.be/38tjExCIeMc">
-    <img src="https://img.youtube.com/vi/38tjExCIeMc/maxresdefault.jpg" alt="Aegis — 4-minute demo" width="720" style="border-radius: 12px; max-width: 100%;">
+    <img src="https://img.youtube.com/vi/38tjExCIeMc/maxresdefault.jpg" alt="Aegis demo" width="720" style="border-radius: 12px; max-width: 100%;">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://youtu.be/38tjExCIeMc"><b>▶ Watch the 4-minute demo on YouTube</b></a>
+  <a href="https://youtu.be/38tjExCIeMc"><b>▶ Watch the demo on YouTube</b></a>
   &nbsp;·&nbsp; 5 Flare primitives load-bearing &nbsp;·&nbsp; 4 on-chain PMW instructions &nbsp;·&nbsp; <code>isSolvent(true, 16666)</code>
 </p>
 
-The demo walks through every layer of the system in under four minutes: title → 5-layer architecture → XRPL→FAssets→VaultCore deposit with live FDC attestation → FCC TEE confidential compute with Merkle root → the killer `isSolvent()` shot returning `(true, 16666)` → autonomous AI risk rebalance → 4 real PMW cross-chain instructions on Coston2 → verifiability recap.
+The demo walks through every layer of the system: title → 5-layer architecture → XRPL→FAssets→VaultCore deposit with live FDC attestation → FCC TEE confidential compute with Merkle root → the killer `isSolvent()` shot returning `(true, 16666)` → autonomous AI risk rebalance → 4 real PMW cross-chain instructions on Coston2 → verifiability recap.
 
 > **Honesty note:** The XRPL settlement leg runs through the `FlareTeeManager` diamond and is simulated in the demo for reliability. All Flare-side PMW instructions are real and verifiable on Coston2.
 
