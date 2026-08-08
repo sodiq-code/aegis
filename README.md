@@ -94,7 +94,7 @@ Aegis is a five-layer system. Each layer depends on a specific Flare primitive a
 +---------------------------------------------------------------------+
 ```
 
-The core verifiability invariant: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events) plus the TEE attestation from Flare's FCC infrastructure, an auditor can reconstruct and verify the vault's solvency.** The TEE provides confidentiality; FCC attestation (verified by Flare's `FlareTeeManager`, not by the Aegis contracts themselves) proves the correct code ran; FDC anchors external state; the on-chain contracts make the published commitment publicly verifiable. See [Attestation trust boundary](#attestation-trust-boundary).
+The core verifiability invariant: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events) plus the TEE attestation from Flare's FCC infrastructure, an auditor can reconstruct and verify the vault's solvency.** The TEE provides confidentiality; FCC attestation (verified by Flare's `FlareTeeManager`, not by the Aegis contracts themselves) proves the correct code ran; FDC anchors external state; the on-chain contracts make the published commitment publicly verifiable.
 
 Full architecture, data-flow and sequence diagrams: [`docs/architecture.md`](./docs/architecture.md).
 
@@ -165,8 +165,6 @@ The vault is live on Coston2 in the state below — any value can be re-checked 
 | Current voting round | ~1,417,821 |
 
 The vault moved above the 150% solvency threshold after FXRP deposits were made through the production deposit path during Phase 2 testing. The ratio fluctuates with the FTSO V2 XRP/USD price feed (refreshed every ~90s); the current state can be re-verified at any time using the `cast` commands below.
-
-> **Source vs deployed:** The deployed Coston2 `SolvencyRoot` predates a `surplusBps` underflow guard added to the source after submission. The guard prevents `publishSolvencyProof()` from reverting when `collateral < liabilities`. Covered by regression tests `test_PublishProof_UndercollateralizedDoesNotRevert` and `test_PublishProof_EqualCollateralLiabilitiesZeroSurplus`. The deployed contract is unaffected; the fix is pending redeployment.
 
 ---
 
@@ -362,26 +360,6 @@ cd contracts  && forge test --summary          # 360 tests, 0 failures
 cd extension  && go test ./...                  # 13 packages
 cd frontend   && npx tsc --noEmit && npm run build
 ```
-
----
-
-## Attestation trust boundary
-
-This section documents where each guarantee is enforced, making the trust boundary explicit.
-
-| Guarantee | Provided by | Enforced where |
-|---|---|---|
-| Correct code ran inside the TEE | Flare FCC (Intel SGX/TDX) | Flare's `FlareTeeManager` (FCC infrastructure) |
-| VERIFIER key bound to a registered TEE | FCC extension registration | `FlareTeeManager` at registration time (not re-checked per-transaction) |
-| Solvency ratio computed correctly from positions | Aegis `PositionComputer` + `RiskAgent` inside the TEE | TEE attestation (off-chain) |
-| Merkle commitment published on-chain | Aegis `SolvencyRoot.publishSolvencyProof()` | On-chain |
-| `collateralRatio ≥ threshold` check | Aegis `SolvencyRoot.isSolvent()` | On-chain |
-| External XRPL state anchored | Flare FDC (`XRPPayment` attestations) | On-chain via `FdcVerification` |
-| Policy constraints enforced before execution | Aegis `PolicyEngine` (in TEE) + `PolicyRegistry` (on-chain) | TEE + on-chain |
-
-**Security statement:** The Aegis `SolvencyRoot` contract does **not** independently verify a TEE attestation quote on-chain. It trusts the `VERIFIER` role registered with Flare's FCC infrastructure. The binding between the VERIFIER key and the TEE identity is established at FCC registration time and verified by Flare's `FlareTeeManager`, not re-verified per-transaction by the Aegis contracts. This is a deliberate design choice — full SGX/TDX quote verification on-chain is gas-expensive and redundant given Flare's FCC infrastructure already performs it. A compromised VERIFIER key (outside FCC's TEE binding) could publish a false `collateralRatio`, mitigated by (a) the key being held inside the TEE, (b) on-chain proof history enabling retrospective fraud detection, and (c) the safe-state circuit breaker.
-
-**Terminology:** Aegis publishes a **TEE-computed, FDC-anchored, Merkle-committed solvency state**. The Merkle root proves commitment; FDC anchors external state; the TEE guarantees the computation. Full provenance requires all three layers.
 
 ---
 
