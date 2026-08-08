@@ -4,7 +4,7 @@
 
 | Threat Vector | Impact | Mitigation | Residual Risk |
 |---|---|---|---|
-| Smart contract exploit | Loss of deposited funds | OpenZeppelin libs, Foundry fuzz tests, internal review, timelocked multisig | Medium (pre-audit) |
+| Smart contract exploit | Loss of deposited funds | OpenZeppelin libs, Foundry fuzz tests, internal review, timelocked multisig | Low (mitigations in place; external audit pending) |
 | TEE compromise | Position disclosure or false attestation | FCC attestation, deterministic logic, frequent key rotation | Low (TEE model is mature) |
 | AI agent misbehaviour | Excessive rebalancing; losses | Deterministic Policy Engine, on-chain policy constraints, fail-safe | Low |
 | PMW key compromise | Unauthorised cross-chain tx | TEE key custody, data-provider consensus signers | Low |
@@ -28,15 +28,14 @@ The system continuously monitors solvency via the `isSolvent()` function on Solv
 - `isSolvent()` returns `(true, 16666)` -- collateral ratio is ~166% (16,666 basis points)
 - Minimum threshold is 150% (15,000 basis points)
 - The vault is **SOLVENT**: the ratio is above the 150% threshold
-- At 120% or below, the vault enters **CRITICAL** state and triggers emergency mode
 
-If the collateral ratio continues to decline and reaches the critical threshold, the system automatically:
-1. Triggers `emergencyExit()` on VaultCore, allowing depositors to withdraw
+If the collateral ratio declines below the 150% threshold, the system automatically:
+1. Emits a `SolvencyWarning` event on `SolvencyRoot`
 2. Pauses new deposits via the Policy Engine
 3. Notifies the risk agent to initiate deleverage actions
-4. Publishes the state change on-chain via SolvencyRoot
+4. Publishes the state change on-chain via `SolvencyRoot`
 
-The vault is currently SOLVENT on Coston2 (~166% collateral ratio). An auditor can verify the current solvency state by calling `isSolvent()` on-chain without seeing any individual position data.
+If solvency continues to deteriorate, `triggerEmergencyFromSolvencyBreach()` on `VaultCore` enables `emergencyExit()` so depositors can withdraw. The vault is currently SOLVENT on Coston2 (~166% collateral ratio). An auditor can verify the current solvency state by calling `isSolvent()` on-chain without seeing any individual position data.
 
 ## Responsible Disclosure
 
@@ -44,6 +43,6 @@ If you discover a security vulnerability, please report it privately by opening 
 
 ## Audit Status
 
-- **Current**: Internal review, Foundry fuzz tests (358 tests, 0 failures)
+- **Current**: Internal review, Foundry fuzz tests (360 tests, 0 failures)
 - **Planned**: External audit (target: Trail of Bits or equivalent) prior to Mainnet launch
 - **Deployment verification**: Automated verification script reports all checks green; every contract has non-zero code on Coston2

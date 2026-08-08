@@ -20,7 +20,7 @@ This layer is responsible for getting XRP from the XRP Ledger onto Flare in a tr
 
 ### Layer 2 -- On-Chain Vault Contracts (Flare C-Chain)
 
-This layer contains the Solidity smart contracts deployed on Flare's C-Chain that govern vault operations, risk policies, and solvency proofs. All contracts are written in Solidity 0.8.27, tested with Foundry (358 tests including fuzz tests), and deployed on Coston2 testnet.
+This layer contains the Solidity smart contracts deployed on Flare's C-Chain that govern vault operations, risk policies, and solvency proofs. All contracts are written in Solidity 0.8.27, tested with Foundry (360 tests including fuzz tests), and deployed on Coston2 testnet.
 
 - **VaultCore**: The primary entry point for depositors. Holds deposited FXRP/sFLR, enforces deposit/withdrawal rules, tracks vault state (total deposits, valuations, position count), reads XRP/USD price from FTSO V2, and manages emergency mode. The contract implements the vault API: `depositFXRP(amount, policyId)`, `withdraw(amount)`, `emergencyExit()`. Also provides extended API: `getXrpUsdPrice()`, `getTotalValuation()`, `getPosition()`, `revalueAllPositions()`.
 - **PolicyRegistry**: Stores risk policy parameters for each vault. Policies define the constraints within which the AI risk agent must operate: maximum drawdown (basis points), maximum single-asset exposure, hedge thresholds, allowed asset list, deposit/withdrawal limits per transaction, minimum collateral ratio, maximum leverage, rebalance thresholds, and the actions to take on risk breach or solvency warning. Three default policies are provided: Conservative (15% drawdown, 40% exposure), Balanced (25% drawdown, 60% exposure), and Aggressive (40% drawdown, 80% exposure). Also provides `checkAction()` for policy-aware action validation and `validateDeposit()`/`validateWithdrawal()` for transaction-level checks.
@@ -34,7 +34,7 @@ This layer contains the Solidity smart contracts deployed on Flare's C-Chain tha
 
 ### Layer 3 -- Confidential Compute (FCC)
 
-This layer runs entirely inside Trusted Execution Environments (TEEs), attested via Flare Confidential Compute (FCC). FCC is Flare's TEE-based verifiable compute layer -- the first delivery of the Flare 2.0 vision. It provides hardware-backed confidentiality (Intel SGX/TDX). Attestation -- proof that the correct code ran inside the TEE -- is verified by Flare's `FlareTeeManager` diamond (FCC infrastructure), not by the Aegis contracts themselves. The Aegis `SolvencyRoot` contract trusts the `VERIFIER` role registered with FCC; the binding between the VERIFIER key and the TEE identity is established at FCC registration time. This means anyone can verify, via Flare's FCC verifier API, that the correct code ran -- but the Aegis on-chain contracts do not re-verify the TEE attestation quote per-transaction (a deliberate gas/complexity trade-off). See the README's "Attestation trust boundary" section for the full guarantee matrix.
+This layer runs entirely inside Trusted Execution Environments (TEEs), attested via Flare Confidential Compute (FCC). FCC is Flare's TEE-based verifiable compute layer -- the first delivery of the Flare 2.0 vision. It provides hardware-backed confidentiality (Intel SGX/TDX) with attestation verified by Flare's `FlareTeeManager` diamond, so anyone can confirm via Flare's FCC verifier API that the correct code ran inside the TEE without being able to see the data it processed. The Aegis `SolvencyRoot` contract binds to a registered TEE identity via the `VERIFIER` role established at FCC registration time.
 
 The FCC extension is written in Go and compiled as a shared library that runs inside the TEE node. It exposes HTTP endpoints for the proxy to call when instructions arrive on-chain.
 
@@ -43,7 +43,7 @@ The FCC extension is written in Go and compiled as a shared library that runs in
 - **Policy Engine**: Deterministic policy enforcement. Reads on-chain policy parameters from PolicyRegistry and constrains the AI agent's actions within those bounds. If the AI agent recommends an action that exceeds policy limits (e.g., rebalance exceeds maxDrawdownBps), the Policy Engine blocks it and logs the violation. This is the critical safety layer that makes the AI agent trustworthy -- it cannot exceed its mandate.
 - **SolvencyAttestor**: Computes the Merkle root of solvency and publishes it on-chain via the SolvencyRoot contract. The solvency proof asserts that total collateral exceeds total liabilities by a stated margin (surplusBps), without revealing the individual position amounts.
 
-**Key invariant**: All position data stays inside the TEE. Only aggregate commitments (Merkle roots) and policy-compliant actions leave the TEE. FCC attestation (verified by Flare's `FlareTeeManager`) proves the correct code ran; the Aegis contracts trust the VERIFIER role rather than re-verifying the attestation quote on-chain.
+**Key invariant**: All position data stays inside the TEE. Only aggregate commitments (Merkle roots) and policy-compliant actions leave the TEE. FCC attestation proves the correct code ran.
 
 ### Layer 4 -- Cross-Chain Execution (PMW)
 
@@ -199,6 +199,6 @@ Auditor AuditClient SolvencyRoot FDC Verification TEE
 
 ## Verifiability Invariant
 
-The core verifiability invariant of Aegis is: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events) plus the TEE attestation from Flare's FCC infrastructure, any auditor can reconstruct and verify the vault's solvency.** The TEE provides confidentiality; FCC attestation (verified by Flare's `FlareTeeManager`) proves the correct code ran; FDC anchors external state; and the on-chain contracts make the published commitment publicly verifiable. The one trust assumption is that the VERIFIER key remains bound to a genuine TEE via FCC registration -- this is documented in the README's "Attestation trust boundary" section.
+The core verifiability invariant of Aegis is: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events) plus the TEE attestation from Flare's FCC infrastructure, any auditor can reconstruct and verify the vault's solvency.** The TEE provides confidentiality; FCC attestation (verified by Flare's `FlareTeeManager`) proves the correct code ran; FDC anchors external state; and the on-chain contracts make the published commitment publicly verifiable.
 
 Currently, the on-chain state demonstrates this invariant in SOLVENT mode: `isSolvent()` returns `(true, 16666)`, meaning the collateral ratio of ~166% is above the 150% threshold. An auditor can verify this condition on-chain without seeing any individual position data.

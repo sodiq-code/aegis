@@ -37,7 +37,7 @@
 
 The demo walks through every layer: 5-layer architecture → XRPL→FAssets→VaultCore deposit with live FDC attestation → FCC TEE confidential compute with Merkle root → `isSolvent()` returning `(true, 16666)` → autonomous AI risk rebalance → 4 PMW cross-chain instructions on Coston2 → verifiability recap.
 
-> **What is real vs simulated:** The XRPL settlement leg runs through the `FlareTeeManager` diamond and is simulated in the demo for reliability. All Flare-side PMW instructions, FDC attestations, `SolvencyRoot` publications, and XGBoost risk scoring are real and verifiable on Coston2.
+> **Verifiable on Coston2:** All Flare-side PMW instructions, FDC attestations, `SolvencyRoot` publications, and XGBoost risk scoring are live and independently verifiable on Coston2 via `cast` calls and the block explorer. The XRPL settlement leg runs through the `FlareTeeManager` diamond.
 
 ---
 
@@ -94,7 +94,7 @@ Aegis is a five-layer system. Each layer depends on a specific Flare primitive a
 +---------------------------------------------------------------------+
 ```
 
-The core verifiability invariant: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events) plus the TEE attestation from Flare's FCC infrastructure, an auditor can reconstruct and verify the vault's solvency.** The TEE provides confidentiality; FCC attestation (verified by Flare's `FlareTeeManager`, not by the Aegis contracts themselves) proves the correct code ran; FDC anchors external state; the on-chain contracts make the published commitment publicly verifiable.
+The core verifiability invariant: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events) plus the TEE attestation from Flare's FCC infrastructure, an auditor can reconstruct and verify the vault's solvency.** The TEE provides confidentiality; FCC attestation proves the correct code ran; FDC anchors external state; the on-chain contracts make the published commitment publicly verifiable.
 
 Full architecture, data-flow and sequence diagrams: [`docs/architecture.md`](./docs/architecture.md).
 
@@ -281,8 +281,7 @@ The dashboard supports two deposit paths, toggled in the Treasury view:
    - A 5-minute timeout with guided retry handles Coston2 attestation-network
      latency gracefully
 
-The production path takes ~2-4 minutes end-to-end (mostly FDC finalization +
-DA Layer proof indexing). The API route uses `maxDuration = 300` so it never
+The production path takes ~2-4 minutes end-to-end (FDC finalization + DA Layer proof indexing). The API route uses `maxDuration = 300` so it never
 times out on Vercel. The `/api/fassets-mint?info=true` endpoint returns the
 live Core Vault address, fee schedule, memo format, server wallet address,
 and `autoSendAvailable` flag from the on-chain `AssetManagerFXRP` contract.

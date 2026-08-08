@@ -32,7 +32,7 @@ cp .env.example .env
 # Build contracts
 forge build
 
-# Run tests (358 tests, 0 failures)
+# Run tests (360 tests, 0 failures)
 forge test -vvv
 
 # Deploy to Coston2
@@ -245,7 +245,7 @@ After deployment, verify each item using the commands shown:
 - [ ] **FCC extension health endpoint returns 200** -- `curl http://localhost:8080/info`
 - [ ] **Frontend dashboard loads** -- Visit http://localhost:3000 (or https://aegis.vercel.app)
 - [ ] **All 3 views display live on-chain data** -- Treasury, Policy, Audit views
-- [ ] **Foundry tests pass** -- `forge test --summary` should show 358 tests, 0 failures
+- [ ] **Foundry tests pass** -- `forge test --summary` should show 360 tests, 0 failures
 - [ ] **Go tests pass** -- `go test ./...` should show 13 packages passing
 - [ ] **Deployment verification script passes** -- `bash scripts/verify-aegis.sh` should report all checks green
 
