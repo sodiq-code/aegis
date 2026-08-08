@@ -4,7 +4,7 @@
 
 | Threat Vector | Impact | Mitigation | Residual Risk |
 |---|---|---|---|
-| Smart contract exploit | Loss of deposited funds | OpenZeppelin libs, Foundry fuzz tests, internal review, timelocked multisig | Low (mitigations in place; external audit pending) |
+| Smart contract exploit | Loss of deposited funds | OpenZeppelin libs, Foundry fuzz tests, internal review, timelocked multisig | Medium (pre-audit; mitigations in place) |
 | TEE compromise | Position disclosure or false attestation | FCC attestation, deterministic logic, frequent key rotation | Low (TEE model is mature) |
 | AI agent misbehaviour | Excessive rebalancing; losses | Deterministic Policy Engine, on-chain policy constraints, fail-safe | Low |
 | PMW key compromise | Unauthorised cross-chain tx | TEE key custody, data-provider consensus signers | Low |

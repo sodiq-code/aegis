@@ -37,7 +37,7 @@
 
 The demo walks through every layer: 5-layer architecture → XRPL→FAssets→VaultCore deposit with live FDC attestation → FCC TEE confidential compute with Merkle root → `isSolvent()` returning `(true, 16666)` → autonomous AI risk rebalance → 4 PMW cross-chain instructions on Coston2 → verifiability recap.
 
-> **Verifiable on Coston2:** All Flare-side PMW instructions, FDC attestations, `SolvencyRoot` publications, and XGBoost risk scoring are live and independently verifiable on Coston2 via `cast` calls and the block explorer. The XRPL settlement leg runs through the `FlareTeeManager` diamond.
+> **Verifiable on Coston2:** All Flare-side PMW instructions, FDC attestations, `SolvencyRoot` publications, and XGBoost risk scoring are live and independently verifiable on Coston2 via `cast` calls and the block explorer. The XRPL settlement leg is simulated in the demo for reliability; the `FlareTeeManager` diamond call is real.
 
 ---
 
