@@ -6,7 +6,7 @@
 
 [![Flare](https://img.shields.io/badge/Flare-Coston2-ff4d2e?style=flat-square&logo=flare)](https://flare.network)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
-[![Foundry Tests](https://img.shields.io/badge/Foundry-358%20passing-success?style=flat-square)](./contracts)
+[![Foundry Tests](https://img.shields.io/badge/Foundry-360%20passing-success?style=flat-square)](./contracts)
 [![Live Dashboard](https://img.shields.io/badge/Dashboard-Live-brightgreen?style=flat-square)](https://aegis-mantle-deploy-s-projects.vercel.app)
 [![Demo Video](https://img.shields.io/badge/Watch-Demo-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://youtu.be/38tjExCIeMc)
 
@@ -16,7 +16,9 @@
 
 ---
 
-> Institutional XRP treasuries are forming now — and they need a way to hold, hedge, and prove solvency without exposing positions. Aegis is the only product that makes this possible, by running an AI risk agent inside a Flare TEE and publishing a verifiable solvency proof — so an auditor can confirm a treasury is solvent **without ever seeing a single position**.
+> **Aegis turns private institutional treasury state into publicly verifiable financial assurance.**
+>
+> An XRP-native treasury can prove it is solvent and policy-compliant without revealing its positions. Flare Confidential Compute performs the risk computation privately; FDC anchors external state; Flare's cross-chain infrastructure enables policy-controlled actions.
 
 ---
 
@@ -33,17 +35,16 @@
   &nbsp;·&nbsp; 5 Flare primitives load-bearing &nbsp;·&nbsp; 4 on-chain PMW instructions &nbsp;·&nbsp; <code>isSolvent(true, 16666)</code>
 </p>
 
-The demo walks through every layer of the system: title → 5-layer architecture → XRPL→FAssets→VaultCore deposit with live FDC attestation → FCC TEE confidential compute with Merkle root → the killer `isSolvent()` shot returning `(true, 16666)` → autonomous AI risk rebalance → 4 real PMW cross-chain instructions on Coston2 → verifiability recap.
+The demo walks through every layer: 5-layer architecture → XRPL→FAssets→VaultCore deposit with live FDC attestation → FCC TEE confidential compute with Merkle root → `isSolvent()` returning `(true, 16666)` → autonomous AI risk rebalance → 4 PMW cross-chain instructions on Coston2 → verifiability recap.
 
-> **Honesty note:** The XRPL settlement leg runs through the `FlareTeeManager` diamond and is simulated in the demo for reliability. All Flare-side PMW instructions are real and verifiable on Coston2.
+> **What is real vs simulated:** The XRPL settlement leg runs through the `FlareTeeManager` diamond and is simulated in the demo for reliability. All Flare-side PMW instructions, FDC attestations, `SolvencyRoot` publications, and XGBoost risk scoring are real and verifiable on Coston2.
 
 ---
 
 ## Key features
 
 - **All five Flare primitives are load-bearing.** FAssets, FTSO, FDC, FCC, and PMW are each structurally required for the protocol to function.
-- **Built for institutional treasury management.** Targets corporate XRP treasuries and large FLR holders.
-- **Verifiable-confidential pattern.** Positions are computed inside a TEE and published as a Merkle root, so an auditor can verify solvency cryptographically without seeing individual positions.
+- **Verifiable-confidential pattern.** Positions are computed inside a TEE and published as a Merkle root, so an auditor can verify a **TEE-computed, FDC-anchored, Merkle-committed solvency state** without seeing individual positions.
 
 ---
 
@@ -93,9 +94,29 @@ Aegis is a five-layer system. Each layer depends on a specific Flare primitive a
 +---------------------------------------------------------------------+
 ```
 
-The core verifiability invariant: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events), any auditor can reconstruct and verify the vault's solvency without trusting any party.** The TEE provides confidentiality; FCC attestation proves the correct code ran; FDC anchors external state; the on-chain contracts make everything publicly verifiable.
+The core verifiability invariant: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events) plus the TEE attestation from Flare's FCC infrastructure, an auditor can reconstruct and verify the vault's solvency.** The TEE provides confidentiality; FCC attestation (verified by Flare's `FlareTeeManager`, not by the Aegis contracts themselves) proves the correct code ran; FDC anchors external state; the on-chain contracts make the published commitment publicly verifiable. See [Attestation trust boundary](#attestation-trust-boundary).
 
 Full architecture, data-flow and sequence diagrams: [`docs/architecture.md`](./docs/architecture.md).
+
+---
+
+## What was built during Summer Signal
+
+The entire Aegis system was built during the Flare Summer Signal hackathon.
+
+| Component | Description |
+|---|---|
+| Vault contracts | `VaultCore`, `PolicyRegistry`, `SolvencyRoot`, `InstructionSender`, `VerifierRole`, `FDCAttestor`, `PMWInstructionRelay` |
+| FCC extension | `PositionComputer`, `RiskAgent` (XGBoost, 200 trees), `PolicyEngine`, `ActionExecutor`, `SolvencyAttestor`, FDC + PMW clients |
+| FDC integration | `XRPPayment` attestation ingestion, DA-Layer proof search (rounds N..N+4) |
+| PMW execution | `PMWInstructionRelay` + `PMWClient` targeting `FlareTeeManager` diamond, 4 on-chain instructions |
+| Safe-state management | NORMAL / SAFE_STATE / EMERGENCY modes, circuit breaker, emergency-exit path |
+| Coston2 deployment | All 7 Aegis contracts + Flare system contract integration |
+| Treasury dashboard | Next.js 16 — Treasury / Policy / Audit views, 18 API routes reading live Coston2 state |
+| Production deposit path | Server-assisted XRPL → FAssets → VaultCore with FDC attestation |
+| TypeScript SDK | `vault-client`, `policy-client`, `audit-client` |
+| Test suite | 360 Foundry tests (fuzz, invariant, edge-case, failure-mode, Coston2 fork) |
+| Autonomous policy loop | AI proposes → deterministic policy constrains → executor executes → TEE attests |
 
 ---
 
@@ -143,7 +164,9 @@ The vault is live on Coston2 in the state below — any value can be re-checked 
 | Instruction count | 13 |
 | Current voting round | ~1,417,821 |
 
-The vault moved above the 150% solvency threshold after FXRP deposits were made through the production deposit path during Phase 2 testing. The ratio fluctuates with the FTSO V2 XRP/USD price feed (refreshed every ~90s); an auditor can re-verify the current state at any time using the `cast` commands below, without seeing individual positions.
+The vault moved above the 150% solvency threshold after FXRP deposits were made through the production deposit path during Phase 2 testing. The ratio fluctuates with the FTSO V2 XRP/USD price feed (refreshed every ~90s); the current state can be re-verified at any time using the `cast` commands below.
+
+> **Source vs deployed:** The deployed Coston2 `SolvencyRoot` predates a `surplusBps` underflow guard added to the source after submission. The guard prevents `publishSolvencyProof()` from reverting when `collateral < liabilities`. Covered by regression tests `test_PublishProof_UndercollateralizedDoesNotRevert` and `test_PublishProof_EqualCollateralLiabilitiesZeroSurplus`. The deployed contract is unaffected; the fix is pending redeployment.
 
 ---
 
@@ -335,10 +358,30 @@ done
 bash scripts/verify-aegis.sh
 
 # 7. Run the test suites
-cd contracts  && forge test --summary          # 358 tests, 0 failures
+cd contracts  && forge test --summary          # 360 tests, 0 failures
 cd extension  && go test ./...                  # 13 packages
 cd frontend   && npx tsc --noEmit && npm run build
 ```
+
+---
+
+## Attestation trust boundary
+
+This section documents where each guarantee is enforced, making the trust boundary explicit.
+
+| Guarantee | Provided by | Enforced where |
+|---|---|---|
+| Correct code ran inside the TEE | Flare FCC (Intel SGX/TDX) | Flare's `FlareTeeManager` (FCC infrastructure) |
+| VERIFIER key bound to a registered TEE | FCC extension registration | `FlareTeeManager` at registration time (not re-checked per-transaction) |
+| Solvency ratio computed correctly from positions | Aegis `PositionComputer` + `RiskAgent` inside the TEE | TEE attestation (off-chain) |
+| Merkle commitment published on-chain | Aegis `SolvencyRoot.publishSolvencyProof()` | On-chain |
+| `collateralRatio ≥ threshold` check | Aegis `SolvencyRoot.isSolvent()` | On-chain |
+| External XRPL state anchored | Flare FDC (`XRPPayment` attestations) | On-chain via `FdcVerification` |
+| Policy constraints enforced before execution | Aegis `PolicyEngine` (in TEE) + `PolicyRegistry` (on-chain) | TEE + on-chain |
+
+**Security statement:** The Aegis `SolvencyRoot` contract does **not** independently verify a TEE attestation quote on-chain. It trusts the `VERIFIER` role registered with Flare's FCC infrastructure. The binding between the VERIFIER key and the TEE identity is established at FCC registration time and verified by Flare's `FlareTeeManager`, not re-verified per-transaction by the Aegis contracts. This is a deliberate design choice — full SGX/TDX quote verification on-chain is gas-expensive and redundant given Flare's FCC infrastructure already performs it. A compromised VERIFIER key (outside FCC's TEE binding) could publish a false `collateralRatio`, mitigated by (a) the key being held inside the TEE, (b) on-chain proof history enabling retrospective fraud detection, and (c) the safe-state circuit breaker.
+
+**Terminology:** Aegis publishes a **TEE-computed, FDC-anchored, Merkle-committed solvency state**. The Merkle root proves commitment; FDC anchors external state; the TEE guarantees the computation. Full provenance requires all three layers.
 
 ---
 
@@ -348,7 +391,7 @@ Aegis is an original implementation. The core components:
 
 | Component | Description |
 |---|---|
-| **Vault contracts** (Solidity 0.8.27) | `VaultCore`, `PolicyRegistry`, `SolvencyRoot`, `InstructionSender`, `VerifierRole`, `FDCAttestor`, `PMWInstructionRelay` + interfaces — 358 Foundry tests incl. fuzz & invariant tests. |
+| **Vault contracts** (Solidity 0.8.27) | `VaultCore`, `PolicyRegistry`, `SolvencyRoot`, `InstructionSender`, `VerifierRole`, `FDCAttestor`, `PMWInstructionRelay` + interfaces — 360 Foundry tests incl. fuzz & invariant tests. |
 | **FCC extension** (Go, in TEE) | `PositionComputer`, `RiskAgent` (XGBoost, 200 trees), `Policy` engine, `SolvencyAttestor`, `ActionExecutor`, FDC + PMW clients — 13 tested packages. |
 | **TypeScript SDK** | `vault-client`, `policy-client`, `audit-client`, provider + config — compiles clean. |
 | **Institutional dashboard** (Next.js 16) | Treasury / Policy / Audit views, 18 API routes reading live Coston2 state, deployed to Vercel. |
@@ -373,7 +416,7 @@ aegis/
 ├── contracts/                      # Foundry project (Solidity 0.8.27)
 │   ├── foundry.toml
 │   ├── src/                        # 7 vault contracts + interfaces (vault, fassets, pmw, fdc)
-│   ├── test/                       # 358 tests incl. fuzz, invariant, fork
+│   ├── test/                       # 360 tests incl. fuzz, invariant, fork
 │   └── script/                     # Deploy scripts (Vault, FDCAttestor, PMWInstructionRelay, …)
 ├── extension/                      # FCC extension (Go, runs inside TEE)
 │   ├── cmd/
@@ -395,7 +438,7 @@ aegis/
 
 | Component | Result |
 |---|---|
-| Foundry (Solidity) | **358 tests pass**, 0 failures (incl. fuzz, invariant, and Coston2 fork tests) |
+| Foundry (Solidity) | **360 tests pass**, 0 failures (incl. fuzz, invariant, and Coston2 fork tests) |
 | Go extension | **13 packages pass** (`go test ./...`) |
 | TypeScript SDK | Compiles clean (`tsc --noEmit`) |
 | Frontend | Next.js 16.3 build, 18 API routes, TypeScript clean (`tsc --noEmit`) |

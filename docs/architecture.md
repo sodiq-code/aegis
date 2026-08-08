@@ -34,7 +34,7 @@ This layer contains the Solidity smart contracts deployed on Flare's C-Chain tha
 
 ### Layer 3 -- Confidential Compute (FCC)
 
-This layer runs entirely inside Trusted Execution Environments (TEEs), attested via Flare Confidential Compute (FCC). FCC is Flare's TEE-based verifiable compute layer -- the first delivery of the Flare 2.0 vision. It provides hardware-backed confidentiality (Intel SGX/TDX) with on-chain attestation, meaning anyone can verify that the correct code ran inside the TEE without being able to see the data it processed.
+This layer runs entirely inside Trusted Execution Environments (TEEs), attested via Flare Confidential Compute (FCC). FCC is Flare's TEE-based verifiable compute layer -- the first delivery of the Flare 2.0 vision. It provides hardware-backed confidentiality (Intel SGX/TDX). Attestation -- proof that the correct code ran inside the TEE -- is verified by Flare's `FlareTeeManager` diamond (FCC infrastructure), not by the Aegis contracts themselves. The Aegis `SolvencyRoot` contract trusts the `VERIFIER` role registered with FCC; the binding between the VERIFIER key and the TEE identity is established at FCC registration time. This means anyone can verify, via Flare's FCC verifier API, that the correct code ran -- but the Aegis on-chain contracts do not re-verify the TEE attestation quote per-transaction (a deliberate gas/complexity trade-off). See the README's "Attestation trust boundary" section for the full guarantee matrix.
 
 The FCC extension is written in Go and compiled as a shared library that runs inside the TEE node. It exposes HTTP endpoints for the proxy to call when instructions arrive on-chain.
 
@@ -43,7 +43,7 @@ The FCC extension is written in Go and compiled as a shared library that runs in
 - **Policy Engine**: Deterministic policy enforcement. Reads on-chain policy parameters from PolicyRegistry and constrains the AI agent's actions within those bounds. If the AI agent recommends an action that exceeds policy limits (e.g., rebalance exceeds maxDrawdownBps), the Policy Engine blocks it and logs the violation. This is the critical safety layer that makes the AI agent trustworthy -- it cannot exceed its mandate.
 - **SolvencyAttestor**: Computes the Merkle root of solvency and publishes it on-chain via the SolvencyRoot contract. The solvency proof asserts that total collateral exceeds total liabilities by a stated margin (surplusBps), without revealing the individual position amounts.
 
-**Key invariant**: All position data stays inside the TEE. Only aggregate commitments (Merkle roots) and policy-compliant actions leave the TEE. FCC attestation proves the correct code ran.
+**Key invariant**: All position data stays inside the TEE. Only aggregate commitments (Merkle roots) and policy-compliant actions leave the TEE. FCC attestation (verified by Flare's `FlareTeeManager`) proves the correct code ran; the Aegis contracts trust the VERIFIER role rather than re-verifying the attestation quote on-chain.
 
 ### Layer 4 -- Cross-Chain Execution (PMW)
 
@@ -199,6 +199,6 @@ Auditor AuditClient SolvencyRoot FDC Verification TEE
 
 ## Verifiability Invariant
 
-The core verifiability invariant of Aegis is: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events), any auditor can reconstruct and verify the vault's solvency without trusting any party**. The TEE provides confidentiality; FCC attestation proves the correct code ran; FDC anchors external state; and the on-chain contracts make everything publicly verifiable.
+The core verifiability invariant of Aegis is: **given the on-chain data (SolvencyRoot proof, FDC attestations, vault events) plus the TEE attestation from Flare's FCC infrastructure, any auditor can reconstruct and verify the vault's solvency.** The TEE provides confidentiality; FCC attestation (verified by Flare's `FlareTeeManager`) proves the correct code ran; FDC anchors external state; and the on-chain contracts make the published commitment publicly verifiable. The one trust assumption is that the VERIFIER key remains bound to a genuine TEE via FCC registration -- this is documented in the README's "Attestation trust boundary" section.
 
 Currently, the on-chain state demonstrates this invariant in SOLVENT mode: `isSolvent()` returns `(true, 16666)`, meaning the collateral ratio of ~166% is above the 150% threshold. An auditor can verify this condition on-chain without seeing any individual position data.

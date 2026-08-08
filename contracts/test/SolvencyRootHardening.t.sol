@@ -210,6 +210,39 @@ contract SolvencyRootHardening is Test {
         assertEq(proof.surplusBps, 999999);
     }
 
+    function test_PublishProof_UndercollateralizedDoesNotRevert() public {
+        // Regression test for the surplusBps underflow guard.
+        // When totalFxrpCollateral < totalLiabilities (both > 0), the subtraction
+        // must NOT revert under Solidity 0.8.x checked arithmetic. Previously this
+        // path reverted, which blocked the SolvencyWarning event from ever firing
+        // in exactly the distressed state it was designed to signal.
+        bytes32 root = keccak256("undercollateralized-proof");
+        // collateral=400M < liabilities=500M, collateralRatio=8000 (< 15000 threshold)
+        vm.prank(verifier);
+        solvencyRoot.publishSolvencyProof(root, 400_000_000, 500_000_000, 8000, 1);
+
+        ISolvencyRoot.SolvencyProof memory proof = solvencyRoot.getSolvencyProof(root);
+        assertEq(proof.surplusBps, 0); // clamped to 0, did not revert
+        assertEq(proof.collateralRatio, 8000);
+        assertTrue(proof.isValid);
+
+        (bool isSolvent, uint256 ratio) = solvencyRoot.isSolvent();
+        assertFalse(isSolvent); // 8000 < 15000 threshold
+        assertEq(ratio, 8000);
+    }
+
+    function test_PublishProof_EqualCollateralLiabilitiesZeroSurplus() public {
+        // Boundary: collateral == liabilities must yield surplusBps = 0 without
+        // reverting (the subtraction yields 0, which is the correct surplus).
+        bytes32 root = keccak256("equal-collateral-liabilities");
+        vm.prank(verifier);
+        solvencyRoot.publishSolvencyProof(root, 500_000_000, 500_000_000, 10000, 1);
+
+        ISolvencyRoot.SolvencyProof memory proof = solvencyRoot.getSolvencyProof(root);
+        assertEq(proof.surplusBps, 0);
+        assertEq(proof.collateralRatio, 10000);
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // MERKLE PROOF EDGE CASES
     // ═══════════════════════════════════════════════════════════════════

@@ -106,13 +106,20 @@ contract SolvencyRoot is ISolvencyRoot {
         SolvencyProof storage proof = _proofs[merkleRoot];
         require(proof.merkleRoot == bytes32(0), "SolvencyRoot: proof already exists");
 
-        // Compute surplus in basis points
+        // Compute surplus in basis points.
+        // The subtraction is guarded: when collateral < liabilities the vault is
+        // undercollateralized, so surplusBps is clamped to 0 and the SolvencyWarning
+        // path below fires normally. Without this guard, Solidity 0.8.x checked
+        // arithmetic would revert on the subtraction, which would prevent the
+        // warning from ever being emitted in exactly the distressed state it was
+        // designed to signal.
         uint256 surplusBps = 0;
-        if (totalLiabilities > 0) {
-            surplusBps = ((totalFxrpCollateral - totalLiabilities) * 10000) / totalLiabilities;
-        } else {
+        if (totalLiabilities == 0) {
             surplusBps = 999999; // Fully solvent with no liabilities
+        } else if (totalFxrpCollateral > totalLiabilities) {
+            surplusBps = ((totalFxrpCollateral - totalLiabilities) * 10000) / totalLiabilities;
         }
+        // else: undercollateralized -> surplusBps stays 0
 
         proof.merkleRoot = merkleRoot;
         proof.surplusBps = surplusBps;
